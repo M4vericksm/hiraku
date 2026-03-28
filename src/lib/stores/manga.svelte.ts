@@ -90,6 +90,35 @@ class MangaStore {
 		localStorage.removeItem('hiraku-library');
 	}
 
+	exportLibrary(): string {
+		return JSON.stringify(
+			{
+				version: '1',
+				exportedAt: new Date().toISOString(),
+				library: this.library,
+			},
+			null,
+			2
+		);
+	}
+
+	importLibrary(json: string): { ok: boolean; count: number; error?: string } {
+		try {
+			const data = JSON.parse(json);
+			if (!data.version || !Array.isArray(data.library)) {
+				return { ok: false, count: 0, error: 'Arquivo inválido ou não é um backup do Hiraku.' };
+			}
+			const incoming: Manga[] = data.library;
+			const existingIds = new Set(this.library.map((m) => m.id));
+			const newEntries = incoming.filter((m) => !existingIds.has(m.id));
+			this.library = [...newEntries.map((m) => ({ ...m, hasHandle: false })), ...this.library];
+			this.saveToStorage();
+			return { ok: true, count: newEntries.length };
+		} catch {
+			return { ok: false, count: 0, error: 'Não foi possível ler o arquivo de backup.' };
+		}
+	}
+
 	get recentManga() {
 		return [...this.library]
 			.filter((m) => m.lastReadAt || m.lastReadPage > 1)
