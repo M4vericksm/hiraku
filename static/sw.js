@@ -1,5 +1,8 @@
 const CACHE = 'hiraku-v1';
 
+// Derive base path from SW location (e.g. /hiraku when deployed to GitHub Pages)
+const BASE = self.location.pathname.replace('/sw.js', '');
+
 self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('activate', (event) => {
@@ -22,8 +25,8 @@ self.addEventListener('fetch', (event) => {
   // External requests (fonts, AniList) — network only, no caching
   if (url.origin !== self.location.origin) return;
 
-  // Immutable SvelteKit assets — cache first
-  if (url.pathname.startsWith('/_app/immutable/')) {
+  // Immutable SvelteKit assets — cache first (works with any base path)
+  if (url.pathname.includes('/_app/immutable/')) {
     event.respondWith(
       caches.match(request).then(
         (cached) =>
@@ -63,7 +66,9 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE).then((c) => c.put(request, clone));
           return res;
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match('/')))
+        .catch(() =>
+          caches.match(request).then((cached) => cached || caches.match(`${BASE}/`))
+        )
     );
   }
 });
