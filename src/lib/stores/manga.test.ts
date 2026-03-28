@@ -157,3 +157,64 @@ describe('MangaStore.clearAll', () => {
 		expect(localStorage.getItem('hiraku-library')).toBeNull();
 	});
 });
+
+describe('MangaStore.exportLibrary', () => {
+	it('returns a valid JSON string', async () => {
+		await mangaStore.addManga(makeManga({ title: 'Export Test' }));
+		const json = mangaStore.exportLibrary();
+		expect(() => JSON.parse(json)).not.toThrow();
+	});
+
+	it('includes version and exportedAt fields', async () => {
+		const json = mangaStore.exportLibrary();
+		const parsed = JSON.parse(json);
+		expect(parsed.version).toBe('1');
+		expect(parsed.exportedAt).toBeTruthy();
+	});
+
+	it('includes all library entries', async () => {
+		await mangaStore.addManga(makeManga({ id: 'e1', title: 'A' }));
+		await mangaStore.addManga(makeManga({ id: 'e2', title: 'B' }));
+		const parsed = JSON.parse(mangaStore.exportLibrary());
+		expect(parsed.library).toHaveLength(2);
+	});
+});
+
+describe('MangaStore.importLibrary', () => {
+	it('imports new entries from valid backup', async () => {
+		const manga = makeManga({ id: 'imp1', title: 'Imported' });
+		const backup = JSON.stringify({ version: '1', exportedAt: new Date().toISOString(), library: [manga] });
+		const result = mangaStore.importLibrary(backup);
+		expect(result.ok).toBe(true);
+		expect(result.count).toBe(1);
+		expect(mangaStore.library.some((m) => m.id === 'imp1')).toBe(true);
+	});
+
+	it('skips entries with duplicate ids', async () => {
+		const manga = makeManga({ id: 'dup' });
+		await mangaStore.addManga(manga);
+		const backup = JSON.stringify({ version: '1', exportedAt: new Date().toISOString(), library: [manga] });
+		const result = mangaStore.importLibrary(backup);
+		expect(result.count).toBe(0);
+		expect(mangaStore.library.filter((m) => m.id === 'dup')).toHaveLength(1);
+	});
+
+	it('marks imported entries as hasHandle: false', async () => {
+		const manga = makeManga({ id: 'nohandle', hasHandle: true });
+		const backup = JSON.stringify({ version: '1', exportedAt: new Date().toISOString(), library: [manga] });
+		mangaStore.importLibrary(backup);
+		const imported = mangaStore.library.find((m) => m.id === 'nohandle');
+		expect(imported?.hasHandle).toBe(false);
+	});
+
+	it('returns error on invalid JSON', () => {
+		const result = mangaStore.importLibrary('not json');
+		expect(result.ok).toBe(false);
+		expect(result.error).toBeTruthy();
+	});
+
+	it('returns error if library field is missing', () => {
+		const result = mangaStore.importLibrary(JSON.stringify({ version: '1' }));
+		expect(result.ok).toBe(false);
+	});
+});
