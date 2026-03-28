@@ -1,10 +1,18 @@
 <script lang="ts">
-  import { ArrowLeft, Palette, Database, Shield, Globe } from 'lucide-svelte';
+  import { ArrowLeft, Palette, Database, Shield, Globe, BarChart2 } from 'lucide-svelte';
   import ThemeSwitcher from '$lib/components/ThemeSwitcher.svelte';
   import { mangaStore } from '$lib/stores/manga.svelte';
   import { goto } from '$app/navigation';
 
   let confirmClear = $state(false);
+
+  const stats = $derived({
+    total: mangaStore.library.length,
+    totalPages: mangaStore.library.reduce((s, m) => s + (m.totalPage || 0), 0),
+    pagesRead: mangaStore.library.reduce((s, m) => s + (m.lastReadPage || 0), 0),
+    completed: mangaStore.library.filter((m) => m.progress >= 100).length,
+    reading: mangaStore.library.filter((m) => m.progress > 0 && m.progress < 100).length,
+  });
 
   function handleClearAll() {
     if (!confirmClear) {
@@ -27,6 +35,32 @@
   </header>
 
   <div class="flex flex-col gap-12">
+    <!-- Stats Section -->
+    <section>
+      <div class="flex items-center gap-3 mb-6">
+        <BarChart2 class="w-6 h-6 text-[var(--accent)]" />
+        <h2 class="text-xl font-bold border-b border-[var(--border)] flex-grow pb-1 font-display">Estatísticas</h2>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="card p-5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius)] text-center">
+          <p class="text-3xl font-black text-[var(--accent)] font-display">{stats.total}</p>
+          <p class="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mt-1 font-body">Mangás</p>
+        </div>
+        <div class="card p-5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius)] text-center">
+          <p class="text-3xl font-black text-[var(--accent)] font-display">{stats.pagesRead.toLocaleString('pt-BR')}</p>
+          <p class="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mt-1 font-body">Pág. Lidas</p>
+        </div>
+        <div class="card p-5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius)] text-center">
+          <p class="text-3xl font-black text-[var(--accent)] font-display">{stats.reading}</p>
+          <p class="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mt-1 font-body">Em Andamento</p>
+        </div>
+        <div class="card p-5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius)] text-center">
+          <p class="text-3xl font-black text-[var(--accent)] font-display">{stats.completed}</p>
+          <p class="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mt-1 font-body">Concluídos</p>
+        </div>
+      </div>
+    </section>
+
     <!-- Appearance Section -->
     <section>
       <div class="flex items-center gap-3 mb-6">
@@ -77,7 +111,7 @@
       </div>
       <div class="card p-6 bg-[var(--accent)]/5 border border-[var(--accent)]/20 rounded-[var(--radius)]">
         <p class="text-sm leading-relaxed font-body">
-          O <strong class="text-[var(--accent)]">MangaFlow</strong> é uma aplicação 100% estática. Seus arquivos PDF não saem do seu computador e seu progresso de leitura fica salvo apenas no seu navegador. Não coletamos dados de uso.
+          O <strong class="text-[var(--accent)]">Hiraku</strong> é uma aplicação 100% estática. Seus arquivos PDF não saem do seu computador e seu progresso de leitura fica salvo apenas no seu navegador. Não coletamos dados de uso.
         </p>
       </div>
     </section>

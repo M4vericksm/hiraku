@@ -33,7 +33,8 @@
 
 	onMount(async () => {
 		if (manga) {
-			currentPage = manga.lastReadPage || 1;
+			const pageParam = page.url.searchParams.get('page');
+			currentPage = pageParam ? Math.max(1, parseInt(pageParam)) : (manga.lastReadPage || 1);
 			try {
 				await loadMangaFile();
 			} catch (err) {

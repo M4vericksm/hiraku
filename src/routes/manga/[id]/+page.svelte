@@ -129,7 +129,7 @@
 							</div>
 							<div>
 								<p class="text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-bold">Autor(a)</p>
-								<p class="text-sm font-bold">{manga.author}</p>
+								<p class="text-sm font-bold">{manga.author || 'Desconhecido'}</p>
 							</div>
 						</div>
 						<div class="flex items-center gap-4">

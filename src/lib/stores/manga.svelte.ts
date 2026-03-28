@@ -28,7 +28,7 @@ class MangaStore {
 	constructor() {
 		if (typeof window === 'undefined') return;
 
-		const saved = localStorage.getItem('mangaflow-library');
+		const saved = localStorage.getItem('hiraku-library');
 		if (saved) {
 			try {
 				this.library = JSON.parse(saved);
@@ -41,7 +41,7 @@ class MangaStore {
 
 	saveToStorage() {
 		if (typeof window === 'undefined') return;
-		localStorage.setItem('mangaflow-library', JSON.stringify(this.library));
+		localStorage.setItem('hiraku-library', JSON.stringify(this.library));
 	}
 
 	async addManga(manga: Manga, handle?: FileSystemFileHandle) {
@@ -87,7 +87,7 @@ class MangaStore {
 
 	clearAll() {
 		this.library = [];
-		localStorage.removeItem('mangaflow-library');
+		localStorage.removeItem('hiraku-library');
 	}
 
 	get recentManga() {

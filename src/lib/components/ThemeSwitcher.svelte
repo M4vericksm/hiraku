@@ -12,13 +12,13 @@
   let currentTheme = $state('theme-ink');
 
   onMount(() => {
-    const saved = localStorage.getItem('mangaflow-theme');
+    const saved = localStorage.getItem('hiraku-theme');
     if (saved) currentTheme = saved;
   });
 
   function setTheme(id: string) {
     currentTheme = id;
-    localStorage.setItem('mangaflow-theme', id);
+    localStorage.setItem('hiraku-theme', id);
     window.location.reload();
   }
 </script>
