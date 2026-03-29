@@ -2,6 +2,7 @@
 	import { mangaStore } from '$lib/stores/manga.svelte';
 	import { Plus, Search, Filter, BookOpen, Trash2, ChevronDown } from 'lucide-svelte';
 	import BulkImportModal from '$lib/components/BulkImportModal.svelte';
+	import { base } from '$app/paths';
 
 	type SortKey = 'addedAt' | 'title' | 'progress' | 'lastReadAt';
 	type FilterKey = 'all' | 'reading' | 'completed' | 'unread';
@@ -151,7 +152,7 @@
 				<h3 class="text-xl mb-6 opacity-60 uppercase tracking-widest text-sm">Continuar Lendo</h3>
 				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 					{#each mangaStore.recentManga.slice(0, 2) as manga}
-						<a href="/manga/{manga.id}" class="card flex h-48 group cursor-pointer hover:border-[var(--accent)] transition-colors">
+						<a href="{base}/manga/{manga.id}" class="card flex h-48 group cursor-pointer hover:border-[var(--accent)] transition-colors">
 							<div class="w-32 bg-[var(--bg-accent)] flex-shrink-0 relative">
 								{#if manga.coverUrl}
 									<img src={manga.coverUrl} alt={manga.title} class="w-full h-full object-cover" />
@@ -183,7 +184,7 @@
 			<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
 				{#each filteredLibrary() as manga}
 					<div class="group cursor-pointer relative">
-						<a href="/manga/{manga.id}">
+						<a href="{base}/manga/{manga.id}">
 							<div class="aspect-[3/4] card mb-3 relative group-hover:-translate-y-2 transition-transform duration-300">
 								{#if manga.coverUrl}
 									<img src={manga.coverUrl} alt={manga.title} class="w-full h-full object-cover" />

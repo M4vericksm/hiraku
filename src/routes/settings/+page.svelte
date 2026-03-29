@@ -3,6 +3,7 @@
   import ThemeSwitcher from '$lib/components/ThemeSwitcher.svelte';
   import { mangaStore } from '$lib/stores/manga.svelte';
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
 
   let confirmClear = $state(false);
 
@@ -50,13 +51,13 @@
     }
     mangaStore.clearAll();
     confirmClear = false;
-    goto('/');
+    goto(`${base}/`);
   }
 </script>
 
 <main class="max-w-4xl mx-auto px-6 py-12 pb-24 text-[var(--text-primary)]">
   <header class="flex items-center gap-4 mb-12">
-    <a href="/" class="p-2 hover:bg-[var(--bg-secondary)] rounded-full transition-colors">
+    <a href="{base}/" class="p-2 hover:bg-[var(--bg-secondary)] rounded-full transition-colors">
       <ArrowLeft class="w-6 h-6" />
     </a>
     <h1 class="text-4xl text-[var(--accent)] font-display font-bold">Configurações</h1>

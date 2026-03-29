@@ -2,9 +2,10 @@
   import '../app.css';
   import { onMount } from 'svelte';
   import { page } from '$app/state';
+  import { base } from '$app/paths';
   import { cn } from '$lib/utils';
   import { Settings, Library } from 'lucide-svelte';
-  
+
   let { children } = $props();
   let currentTheme = $state('theme-ink');
 
@@ -15,7 +16,7 @@
     }
   });
 
-  const isReader = $derived(page.url.pathname.startsWith('/reader'));
+  const isReader = $derived(page.route.id?.startsWith('/reader'));
 </script>
 
 <svelte:head>
@@ -28,10 +29,10 @@
 <div class={cn(currentTheme, "min-h-screen bg-[var(--bg-primary)] transition-colors duration-500 overflow-x-hidden")}>
   {#if !isReader}
     <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-[var(--bg-secondary)]/80 backdrop-blur-xl border border-[var(--border)] px-8 py-4 rounded-3xl shadow-2xl flex items-center gap-12 animate-in slide-in-from-bottom-10 duration-700">
-      <a href="/" class={cn("p-2 transition-all hover:scale-110", page.url.pathname === '/' ? "text-[var(--accent)]" : "text-[var(--text-muted)]")}>
+      <a href="{base}/" class={cn("p-2 transition-all hover:scale-110", page.route.id === '/' ? "text-[var(--accent)]" : "text-[var(--text-muted)]")}>
         <Library class="w-7 h-7" />
       </a>
-      <a href="/settings" class={cn("p-2 transition-all hover:scale-110", page.url.pathname === '/settings' ? "text-[var(--accent)]" : "text-[var(--text-muted)]")}>
+      <a href="{base}/settings" class={cn("p-2 transition-all hover:scale-110", page.route.id === '/settings' ? "text-[var(--accent)]" : "text-[var(--text-muted)]")}>
         <Settings class="w-7 h-7" />
       </a>
     </nav>

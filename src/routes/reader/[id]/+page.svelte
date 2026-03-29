@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { base } from '$app/paths';
 	import { mangaStore } from '$lib/stores/manga.svelte';
 	import { PDFService } from '$lib/services/pdf';
 	import { PersistenceService } from '$lib/services/persistence';
@@ -242,7 +243,7 @@
 		)}
 	>
 		<div class="flex items-center gap-4">
-			<a href="/manga/{id}" class="p-2 hover:bg-white/10 rounded-full transition-colors">
+			<a href="{base}/manga/{id}" class="p-2 hover:bg-white/10 rounded-full transition-colors">
 				<ArrowLeft class="w-5 h-5" />
 			</a>
 			<div>
@@ -281,7 +282,7 @@
 			<button class="p-2 hover:bg-white/10 rounded-full transition-colors" onclick={() => (sidebarOpen = !sidebarOpen)}>
 				<Menu class="w-5 h-5" />
 			</button>
-			<a href="/settings" class="hidden sm:flex p-2 hover:bg-white/10 rounded-full transition-colors">
+			<a href="{base}/settings" class="hidden sm:flex p-2 hover:bg-white/10 rounded-full transition-colors">
 				<Settings class="w-5 h-5" />
 			</a>
 			<button class="p-2 hover:bg-white/10 rounded-full transition-colors" onclick={toggleFullscreen}>

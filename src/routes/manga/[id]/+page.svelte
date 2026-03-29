@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { base } from '$app/paths';
 	import { mangaStore } from '$lib/stores/manga.svelte';
 	import { ArrowLeft, BookOpen, Clock, Tag, ChevronRight, Play, Database } from 'lucide-svelte';
 	import { cn } from '$lib/utils';
@@ -47,7 +48,7 @@
 					<!-- Main CTA -->
 					<div class="pb-4 md:pb-6 flex-shrink-0">
 						<a 
-							href="/reader/{manga.id}" 
+							href="{base}/reader/{manga.id}" 
 							class="btn-primary flex items-center gap-4 px-10 py-5 text-lg font-black shadow-[0_20px_40px_rgba(0,0,0,0.3)] rounded-2xl group"
 						>
 							<Play class="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
@@ -81,7 +82,7 @@
 						{#if manga.bookmarks && manga.bookmarks.length > 0}
 							{#each manga.bookmarks as chapter, i}
 								<a 
-									href="/reader/{manga.id}?page={chapter.pageNumber}"
+									href="{base}/reader/{manga.id}?page={chapter.pageNumber}"
 									class="p-5 border border-[var(--border)] rounded-2xl bg-[var(--bg-secondary)] flex items-center justify-between group cursor-pointer hover:border-[var(--accent)] hover:bg-[var(--bg-accent)]/5 transition-all active:scale-[0.99]"
 								>
 									<div class="flex items-center gap-6">
@@ -150,7 +151,7 @@
 	<div class="min-h-screen flex flex-col items-center justify-center p-6 text-center text-[var(--text-primary)]">
 		<h1 class="text-8xl font-black mb-4 text-[var(--accent)] opacity-20">404</h1>
 		<p class="text-[var(--text-secondary)] mb-10 uppercase tracking-[0.4em] font-bold text-sm">Mangá não encontrado na coleção.</p>
-		<a href="/" class="btn-primary flex items-center gap-3 px-8 py-4">
+		<a href="{base}/" class="btn-primary flex items-center gap-3 px-8 py-4">
 			<ArrowLeft class="w-5 h-5" /> VOLTAR PARA BIBLIOTECA
 		</a>
 	</div>
