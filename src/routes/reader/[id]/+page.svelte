@@ -24,8 +24,6 @@
 	let isFullscreen = $state(false);
 
 	let controlsTimeout: ReturnType<typeof setTimeout>;
-	let touchStartX = 0;
-	let touchStartY = 0;
 
 	const READING_MODES: { value: 'horizontal' | 'rtl' | 'vertical'; label: string }[] = [
 		{ value: 'horizontal', label: 'LTR' },
@@ -37,7 +35,13 @@
 		if (manga) {
 			const pageParam = page.url.searchParams.get('page');
 			currentPage = pageParam ? Math.max(1, parseInt(pageParam)) : (manga.lastReadPage || 1);
-			await loadMangaFile();
+			try {
+				await loadMangaFile();
+			} catch (err) {
+				console.error('Erro ao carregar mangá', err);
+				error = 'Não foi possível acessar o arquivo PDF. Clique abaixo para re-selecionar.';
+				isLoading = false;
+			}
 		}
 		document.addEventListener('keydown', handleKeyDown);
 		document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -89,27 +93,6 @@
 		readingMode = READING_MODES[(idx + 1) % READING_MODES.length].value;
 	}
 
-	function handleTouchStart(e: TouchEvent) {
-		touchStartX = e.touches[0].clientX;
-		touchStartY = e.touches[0].clientY;
-	}
-
-	function handleTouchEnd(e: TouchEvent) {
-		const dx = e.changedTouches[0].clientX - touchStartX;
-		const dy = e.changedTouches[0].clientY - touchStartY;
-		if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx)) {
-			// Tap ou swipe vertical — toggle controles
-			if (Math.abs(dx) < 10 && Math.abs(dy) < 10) isControlsVisible = !isControlsVisible;
-			return;
-		}
-		if (readingMode === 'vertical') return;
-		if (dx < 0) {
-			readingMode === 'rtl' ? prevPage() : nextPage();
-		} else {
-			readingMode === 'rtl' ? nextPage() : prevPage();
-		}
-	}
-
 	async function loadMangaFile() {
 		if (!manga) return;
 
@@ -121,37 +104,19 @@
 				const permission = await (handle as any).requestPermission({ mode: 'read' });
 				if (permission === 'granted') {
 					file = await handle.getFile();
-				} else {
-					error =
-						'O acesso ao arquivo foi negado. Verifique se o arquivo ainda existe e conceda a permissão quando solicitado.';
-					isLoading = false;
-					return;
 				}
-			} catch (err: any) {
-				if (err?.name === 'NotFoundError') {
-					error =
-						'Arquivo não encontrado. Ele pode ter sido movido ou excluído. Selecione-o novamente abaixo.';
-				} else {
-					error = 'Não foi possível acessar o arquivo. Selecione-o novamente abaixo.';
-				}
-				isLoading = false;
-				return;
+			} catch (err) {
+				console.warn('Falha ao usar handle persistido', err);
 			}
-		} else {
-			error =
-				'Nenhuma permissão salva para este arquivo. Selecione o PDF manualmente para continuar.';
+		}
+
+		if (!file) {
+			error = 'Permissão de acesso ao arquivo necessária.';
 			isLoading = false;
 			return;
 		}
 
-		try {
-			pdfDoc = await PDFService.loadDocument(file);
-		} catch {
-			error =
-				'Não foi possível abrir o PDF. O arquivo pode estar corrompido ou em um formato não suportado.';
-			isLoading = false;
-			return;
-		}
+		pdfDoc = await PDFService.loadDocument(file);
 		await renderPage();
 		isLoading = false;
 	}
@@ -252,8 +217,8 @@
 		</div>
 
 		<div class="flex items-center gap-1">
-			<!-- Toggle modo de leitura (oculto em mobile, acessível via tecla M) -->
-			<div class="hidden sm:flex items-center gap-0.5 bg-white/5 rounded-lg p-1 mr-2">
+			<!-- Toggle modo de leitura -->
+			<div class="flex items-center gap-0.5 bg-white/5 rounded-lg p-1 mr-2">
 				{#each READING_MODES as mode}
 					<button
 						onclick={() => (readingMode = mode.value)}
@@ -269,19 +234,11 @@
 					</button>
 				{/each}
 			</div>
-			<!-- Modo ativo compacto visível apenas em mobile -->
-			<button
-				onclick={cycleModes}
-				class="sm:hidden px-2 py-1 rounded bg-white/5 text-[10px] font-bold uppercase tracking-widest text-[var(--accent)] mr-1"
-				title="Trocar modo (M)"
-			>
-				{readingMode === 'horizontal' ? 'LTR' : readingMode === 'rtl' ? 'RTL' : 'Vert'}
-			</button>
 
 			<button class="p-2 hover:bg-white/10 rounded-full transition-colors" onclick={() => (sidebarOpen = !sidebarOpen)}>
 				<Menu class="w-5 h-5" />
 			</button>
-			<a href="/settings" class="hidden sm:flex p-2 hover:bg-white/10 rounded-full transition-colors">
+			<a href="/settings" class="p-2 hover:bg-white/10 rounded-full transition-colors">
 				<Settings class="w-5 h-5" />
 			</a>
 			<button class="p-2 hover:bg-white/10 rounded-full transition-colors" onclick={toggleFullscreen}>
@@ -303,8 +260,6 @@
 			readingMode === 'vertical' ? 'flex-col gap-4 py-20' : ''
 		)}
 		onclick={() => (isControlsVisible = !isControlsVisible)}
-		ontouchstart={handleTouchStart}
-		ontouchend={handleTouchEnd}
 	>
 		{#if isLoading}
 			<div class="flex flex-col items-center gap-6">
@@ -402,8 +357,7 @@
 			</div>
 			<span class="text-[10px] font-mono text-white/30 uppercase tracking-widest w-6">{manga?.totalPage}</span>
 		</div>
-		<p class="hidden sm:block text-center text-[9px] text-white/15 mt-2 uppercase tracking-widest font-mono">← → navegar &nbsp;·&nbsp; M modo &nbsp;·&nbsp; F tela cheia &nbsp;·&nbsp; ESC fechar</p>
-		<p class="sm:hidden text-center text-[9px] text-white/15 mt-2 uppercase tracking-widest font-mono">deslize para navegar &nbsp;·&nbsp; toque para controles</p>
+		<p class="text-center text-[9px] text-white/15 mt-2 uppercase tracking-widest font-mono">← → navegar &nbsp;·&nbsp; M modo &nbsp;·&nbsp; F tela cheia &nbsp;·&nbsp; ESC fechar</p>
 	</footer>
 
 	<!-- Sidebar Lateral -->

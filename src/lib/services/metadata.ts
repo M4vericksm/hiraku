@@ -46,7 +46,7 @@ export class MetadataService {
       });
 
       const data = await response.json();
-      return data.data.Page.media.map((m: any) => ({
+      return data.Page.media.map((m: any) => ({
         id: String(m.id),
         title: m.title.english || m.title.romaji,
         coverUrl: m.coverImage.large,

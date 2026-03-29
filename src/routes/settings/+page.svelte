@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, Palette, Database, Shield, Globe, BarChart2, Download, Upload } from 'lucide-svelte';
+  import { ArrowLeft, Palette, Database, Shield, Globe, BarChart2 } from 'lucide-svelte';
   import ThemeSwitcher from '$lib/components/ThemeSwitcher.svelte';
   import { mangaStore } from '$lib/stores/manga.svelte';
   import { goto } from '$app/navigation';
@@ -13,34 +13,6 @@
     completed: mangaStore.library.filter((m) => m.progress >= 100).length,
     reading: mangaStore.library.filter((m) => m.progress > 0 && m.progress < 100).length,
   });
-
-  let importFeedback = $state<{ ok: boolean; message: string } | null>(null);
-
-  function handleExport() {
-    const json = mangaStore.exportLibrary();
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `hiraku-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function handleImport(e: Event) {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const result = mangaStore.importLibrary(ev.target?.result as string);
-      importFeedback = result.ok
-        ? { ok: true, message: `${result.count} mangá(s) importado(s) com sucesso.` }
-        : { ok: false, message: result.error ?? 'Erro desconhecido.' };
-      setTimeout(() => (importFeedback = null), 5000);
-    };
-    reader.readAsText(file);
-    (e.target as HTMLInputElement).value = '';
-  }
 
   function handleClearAll() {
     if (!confirmClear) {
@@ -100,43 +72,6 @@
       <ThemeSwitcher />
     </section>
 
-    <!-- Backup Section -->
-    <section>
-      <div class="flex items-center gap-3 mb-6">
-        <Download class="w-6 h-6 text-[var(--accent)]" />
-        <h2 class="text-xl font-bold border-b border-[var(--border)] flex-grow pb-1 font-display">Backup</h2>
-      </div>
-      <p class="text-[var(--text-secondary)] mb-6 -mt-4 text-sm font-body">Exporte ou importe sua biblioteca em JSON. Os arquivos PDF não são incluídos — apenas o progresso e os metadados.</p>
-
-      {#if importFeedback}
-        <div class={[
-          'mb-4 p-4 rounded-[var(--radius)] text-sm font-body border',
-          importFeedback.ok
-            ? 'bg-green-500/10 border-green-500/30 text-green-400'
-            : 'bg-red-500/10 border-red-500/30 text-red-400'
-        ].join(' ')}>
-          {importFeedback.message}
-        </div>
-      {/if}
-
-      <div class="flex flex-col sm:flex-row gap-4">
-        <button
-          onclick={handleExport}
-          disabled={mangaStore.library.length === 0}
-          class="flex-1 flex items-center justify-center gap-3 px-5 py-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-secondary)] hover:border-[var(--accent)]/50 transition-all text-sm font-bold uppercase tracking-widest font-body disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <Download class="w-4 h-4" />
-          Exportar Biblioteca
-        </button>
-
-        <label class="flex-1 flex items-center justify-center gap-3 px-5 py-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-secondary)] hover:border-[var(--accent)]/50 transition-all text-sm font-bold uppercase tracking-widest font-body cursor-pointer">
-          <Upload class="w-4 h-4" />
-          Importar Backup
-          <input type="file" accept="application/json,.json" class="hidden" onchange={handleImport} />
-        </label>
-      </div>
-    </section>
-
     <!-- Storage Section -->
     <section>
       <div class="flex items-center gap-3 mb-6">
@@ -144,7 +79,7 @@
         <h2 class="text-xl font-bold border-b border-[var(--border)] flex-grow pb-1 font-display">Armazenamento</h2>
       </div>
       <p class="text-[var(--text-secondary)] mb-6 -mt-4 text-sm font-body">Dados salvos localmente no seu dispositivo.</p>
-
+      
       <div class="card p-6 flex items-center justify-between border border-[var(--border)] bg-[var(--bg-secondary)] rounded-[var(--radius)]">
         <div>
           <h4 class="font-bold mb-1 font-body">Limpar Biblioteca</h4>

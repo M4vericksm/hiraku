@@ -9,7 +9,8 @@ async function getPdfJS() {
   if (browser) {
     try {
       pdfjs = await import('pdfjs-dist');
-
+      console.log('PDF.js Version:', pdfjs.version);
+      
       if (!pdfjs.GlobalWorkerOptions.workerSrc) {
         // Usar o worker local processado pelo Vite
         pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;

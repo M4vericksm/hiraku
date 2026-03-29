@@ -1,5 +1,5 @@
 export class PersistenceService {
-	private static DB_NAME = 'hiraku-storage';
+	private static DB_NAME = 'mangaflow-storage';
 	private static STORE_NAME = 'file-handles';
 
 	private static async getDB(): Promise<IDBDatabase> {
