@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { mangaStore } from '$lib/stores/manga.svelte';
+	import { type Series } from '$lib/stores/manga.svelte';
 	import { Plus, Search, Filter, BookOpen, Trash2, ChevronDown } from 'lucide-svelte';
 	import BulkImportModal from '$lib/components/BulkImportModal.svelte';
 	import { base } from '$app/paths';
@@ -49,6 +50,23 @@
 
 		return list;
 	});
+
+	// IDs that belong to a series
+	const seriesVolumeIds = $derived(
+		new Set(mangaStore.library.filter(m => m.seriesId).map(m => m.id))
+	);
+
+	// Standalone manga (not part of a series)
+	const standaloneManga = $derived(
+		filteredLibrary().filter(m => !m.seriesId)
+	);
+
+	// All series, filtered by search if applicable
+	const filteredSeries = $derived(
+		mangaStore.seriesList.filter(s =>
+			s.title.toLowerCase().includes(searchQuery.toLowerCase())
+		)
+	);
 
 	function handleImport() {
 		isImportModalOpen = true;
@@ -182,18 +200,54 @@
 		<section>
 			<h3 class="text-xl mb-6 opacity-60 uppercase tracking-widest text-sm">Minha Biblioteca</h3>
 			<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-				{#each filteredLibrary() as manga}
+				<!-- Series cards -->
+				{#each filteredSeries as series}
+					<div class="group cursor-pointer relative">
+						<a href="{base}/series/{series.id}">
+							<div class="aspect-[3/4] mb-3 relative group-hover:-translate-y-2 transition-transform duration-300">
+								<!-- Stacked covers effect -->
+								{#each series.volumes.slice(0, 3).reverse() as vol, i}
+									<div
+										class="absolute inset-0 rounded-[var(--radius)] overflow-hidden border border-[var(--border)]"
+										style="transform: rotate({(i-1)*2}deg) scale({1 - i*0.03}); z-index: {i};"
+									>
+										{#if vol.coverUrl}
+											<img src={vol.coverUrl} alt={vol.title} class="w-full h-full object-cover" />
+										{/if}
+									</div>
+								{/each}
+								<!-- Volume count badge -->
+								<div class="absolute top-1.5 right-1.5 z-10 bg-[var(--accent)] text-[var(--accent-foreground)] text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-widest">
+									{series.volumes.length} vol.
+								</div>
+								<!-- Hover overlay -->
+								<div class="absolute inset-0 z-10 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-[var(--radius)] flex items-end justify-center pb-4">
+									<span class="text-white text-[10px] font-black uppercase tracking-widest bg-[var(--accent)] px-3 py-1.5 rounded-md flex items-center gap-1.5">
+										<BookOpen class="w-3 h-3" /> VER SÉRIE
+									</span>
+								</div>
+							</div>
+							<h4 class="text-sm font-medium line-clamp-2 leading-snug group-hover:text-[var(--accent)] transition-colors font-body">{series.title}</h4>
+							<p class="text-[10px] text-[var(--text-muted)] mt-0.5">{series.volumes.length} volume{series.volumes.length !== 1 ? 's' : ''}</p>
+						</a>
+					</div>
+				{/each}
+
+				<!-- Standalone manga cards -->
+				{#each standaloneManga as manga}
 					<div class="group cursor-pointer relative">
 						<a href="{base}/manga/{manga.id}">
 							<div class="aspect-[3/4] card mb-3 relative group-hover:-translate-y-2 transition-transform duration-300">
 								{#if manga.coverUrl}
 									<img src={manga.coverUrl} alt={manga.title} class="w-full h-full object-cover" />
 								{/if}
-								<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-									<BookOpen class="w-10 h-10 text-white" />
+								<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-4">
+									<span class="text-white text-[10px] font-black uppercase tracking-widest bg-[var(--accent)] px-3 py-1.5 rounded-md flex items-center gap-1.5">
+										<BookOpen class="w-3 h-3" /> LER
+									</span>
 								</div>
 								{#if manga.progress > 0}
-									<div class="absolute bottom-0 left-0 w-full h-1 bg-black/40">
+									<div class="absolute bottom-0 left-0 w-full h-1.5 bg-black/40">
 										<div class="h-full bg-[var(--accent)]" style="width: {manga.progress}%"></div>
 									</div>
 								{/if}
@@ -215,6 +269,7 @@
 					</div>
 				{/each}
 
+				<!-- Import button -->
 				<button onclick={handleImport} class="aspect-[3/4] border-2 border-dashed border-[var(--border)] rounded-[var(--radius)] flex flex-col items-center justify-center gap-2 text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all group">
 					<Plus class="w-8 h-8 group-hover:scale-110 transition-transform" />
 					<span class="text-xs font-bold uppercase tracking-tighter">Importar PDF</span>
