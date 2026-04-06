@@ -379,6 +379,16 @@
 	const zoomPercent = $derived(Math.round(zoomLevel * 100));
 </script>
 
+{#if !manga && !isLoading}
+	<!-- Manga ID not found in library -->
+	<div class="fixed inset-0 bg-[#050505] text-white flex flex-col items-center justify-center gap-6 font-body">
+		<p class="text-8xl font-black text-white/10">404</p>
+		<p class="text-sm uppercase tracking-[0.3em] text-white/40">Mangá não encontrado na biblioteca</p>
+		<a href="{base}/" class="mt-4 px-6 py-3 bg-[var(--accent)] text-[var(--accent-foreground)] rounded-xl text-sm font-bold uppercase tracking-widest flex items-center gap-2">
+			<ArrowLeft class="w-4 h-4" /> Voltar para a biblioteca
+		</a>
+	</div>
+{:else}
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	id="reader-root"
@@ -669,6 +679,7 @@
 		</div>
 	</aside>
 </div>
+{/if}
 
 <style>
 	:global(body) { overflow: hidden; background: #000; }
