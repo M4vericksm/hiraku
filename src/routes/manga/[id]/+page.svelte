@@ -2,13 +2,31 @@
 	import { page } from '$app/state';
 	import { base } from '$app/paths';
 	import { mangaStore } from '$lib/stores/manga.svelte';
-	import { ArrowLeft, BookOpen, Clock, Tag, ChevronRight, Play, Database, Search } from 'lucide-svelte';
+	import { ArrowLeft, BookOpen, Clock, Tag, ChevronRight, Play, Database, Search, Plus } from 'lucide-svelte';
 	import MetadataSearchModal from '$lib/components/MetadataSearchModal.svelte';
 	import { cn } from '$lib/utils';
 
 	const id = $derived(page.params.id);
 	const manga = $derived(mangaStore.library.find((m) => m.id === id));
 	let isMetaModalOpen = $state(false);
+	let isCreatingVolumes = $state(false);
+	let createVolError = $state<string | null>(null);
+
+	async function handleCreateSeries() {
+		if (!manga) return;
+		isCreatingVolumes = true;
+		createVolError = null;
+		try {
+			// Convert current manga to Volume 1 of a new series
+			const seriesId = mangaStore.createSeries(manga.id);
+			// Navigate to the series page
+			const { goto } = await import('$app/navigation');
+			goto(`${base}/series/${seriesId}`);
+		} catch (e) {
+			createVolError = 'Erro ao criar série.';
+			isCreatingVolumes = false;
+		}
+	}
 </script>
 
 {#if manga}
@@ -69,6 +87,22 @@
 							<Search class="w-4 h-4" />
 							Buscar Metadados
 						</button>
+						{#if !manga.seriesId}
+							<button
+								onclick={handleCreateSeries}
+								disabled={isCreatingVolumes}
+								class="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent)]/50 transition-all text-sm font-bold disabled:opacity-50"
+							>
+								<Plus class="w-4 h-4" />
+								{isCreatingVolumes ? 'Criando...' : 'Criar Série / Adicionar Volumes'}
+							</button>
+							{#if createVolError}<p class="text-xs text-red-500 text-center">{createVolError}</p>{/if}
+						{:else}
+							<a href="{base}/series/{manga.seriesId}" class="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl border border-[var(--accent)]/30 text-[var(--accent)] hover:bg-[var(--accent)]/5 transition-all text-sm font-bold">
+								<BookOpen class="w-4 h-4" />
+								Ver Série Completa
+							</a>
+						{/if}
 					</div>
 				</div>
 			</div>

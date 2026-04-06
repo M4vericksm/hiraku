@@ -154,7 +154,7 @@
 									{/each}
 								</div>
 								{#if result.description}
-									<p class="text-xs text-[var(--text-muted)] mt-2 line-clamp-2 leading-relaxed">{result.description.replace(/<[^>]*>?/gm, '')}</p>
+									<p class="text-xs text-[var(--text-muted)] mt-2 line-clamp-2 leading-relaxed">{result.description.replace(/<[^>]*>/gm, '')}</p>
 								{/if}
 							</div>
 						</button>

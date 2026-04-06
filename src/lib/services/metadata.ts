@@ -42,28 +42,33 @@ export class MetadataService {
     `;
 
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
       const response = await fetch(this.ANILIST_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: graphqlQuery,
-          variables: { search: query }
-        })
+        body: JSON.stringify({ query: graphqlQuery, variables: { search: query } }),
+        signal: controller.signal
       });
+      clearTimeout(timeout);
 
+      if (!response.ok) return [];
       const data = await response.json();
+      if (!data?.data?.Page?.media) return [];
+
       return data.data.Page.media.map((m: any) => ({
         id: String(m.id),
-        title: m.title.english || m.title.romaji,
-        coverUrl: m.coverImage.large,
-        description: m.description,
-        author: m.staff?.nodes[0]?.name?.full,
+        title: m.title?.english || m.title?.romaji || 'Sem título',
+        coverUrl: m.coverImage?.large ?? '',
+        description: m.description ?? '',
+        author: m.staff?.nodes?.[0]?.name?.full,
         genres: m.genres?.slice(0, 5) ?? [],
-        status: m.status,
-        averageScore: m.averageScore
+        status: m.status ?? undefined,
+        averageScore: m.averageScore ?? undefined
       }));
-    } catch (err) {
-      console.error('Erro AniList', err);
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') console.error('Erro AniList', err);
       return [];
     }
   }
