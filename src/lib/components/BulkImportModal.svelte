@@ -106,10 +106,15 @@
 			items[idx].previewUrl = await PDFService.getPageAsImage(doc, 1, 0.2);
 			
 			items[idx].status = 'identifying';
-			const rawTitle = meta.title || await MetadataService.extractTitleFromFilename(item.file.name);
+			// Always derive the AniList search query from the filename — PDF embedded
+			// metadata titles often include volume info ("AJIN VOL.01") which breaks matching.
+			const searchTitle = MetadataService.extractTitleFromFilename(item.file.name);
+			// Use PDF metadata title as display suggestion if available and looks clean,
+			// otherwise fall back to the filename-derived title.
+			const rawTitle = (meta.title && meta.title.trim().length > 0) ? meta.title.trim() : searchTitle;
 			items[idx].suggestedTitle = rawTitle;
-			
-			const results = await MetadataService.searchAniList(rawTitle);
+
+			const results = await MetadataService.searchAniList(searchTitle);
 			if (results.length > 0) {
 				items[idx].anilistResults = results;
 				items[idx].metadata = results[0];
@@ -149,11 +154,15 @@
 		const readyItems = items.filter(i => i.status === 'ready' && i.metadata);
 		const mangasToAdd = readyItems.map(item => ({
 			manga: {
-				id: item.metadata!.id || crypto.randomUUID(),
+				id: crypto.randomUUID(),             // always UUID — never AniList ID
+				anilistId: item.metadata!.id,        // store AniList ID separately for series matching
 				title: item.metadata!.title,
 				author: item.metadata!.author,
 				coverUrl: item.metadata!.coverUrl,
 				description: item.metadata!.description,
+				genres: item.metadata!.genres,
+				status: item.metadata!.status,
+				averageScore: item.metadata!.averageScore,
 				progress: 0,
 				lastReadPage: 1,
 				totalPage: item.pageCount,

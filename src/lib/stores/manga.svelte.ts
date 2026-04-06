@@ -7,6 +7,7 @@ export interface PDFBookmark {
 
 export interface Manga {
   id: string;
+  anilistId?: string;      // AniList manga ID (separate from app ID to avoid collisions)
   title: string;
   author?: string;
   coverUrl?: string;       // loaded at runtime from IndexedDB, not persisted to localStorage
@@ -110,6 +111,38 @@ class MangaStore {
       if (item.manga.coverUrl) {
         await PersistenceService.saveCover(item.manga.id, item.manga.coverUrl);
       }
+
+      // Auto-group: if the library already has a manga with the same anilistId,
+      // automatically link this new volume into the same series.
+      if (item.manga.anilistId) {
+        const existing = this.library.find(m => m.anilistId === item.manga.anilistId);
+        if (existing) {
+          let seriesId: string;
+
+          if (existing.seriesId) {
+            // Already in a series — join it
+            seriesId = existing.seriesId;
+          } else {
+            // Standalone — create a new series, make the existing entry Vol 1
+            seriesId = `series-${crypto.randomUUID()}`;
+            const existingIdx = this.library.findIndex(m => m.id === existing.id);
+            this.library[existingIdx] = {
+              ...this.library[existingIdx],
+              seriesId,
+              volumeNumber: this.library[existingIdx].volumeNumber ?? 1
+            };
+          }
+
+          // Determine next volume number
+          const takenNums = this.library
+            .filter(m => m.seriesId === seriesId)
+            .map(m => m.volumeNumber ?? 0);
+          const nextVol = takenNums.length > 0 ? Math.max(...takenNums) + 1 : 2;
+
+          item.manga.seriesId = seriesId;
+          item.manga.volumeNumber = nextVol;
+        }
+      }
     }
     this.library = [...mangas.map(m => m.manga), ...this.library];
     this.saveToStorage();
@@ -135,6 +168,32 @@ class MangaStore {
     await PersistenceService.removeCover(id);
     this.library = this.library.filter((m) => m.id !== id);
     this.saveToStorage();
+  }
+
+  /**
+   * Remove a volume from a series. If only one volume would remain,
+   * that volume is unlinkied from the series (becomes standalone).
+   */
+  async removeVolumeFromSeries(mangaId: string) {
+    const manga = this.library.find(m => m.id === mangaId);
+    if (!manga) return;
+
+    if (manga.seriesId) {
+      const remaining = this.library.filter(
+        m => m.seriesId === manga.seriesId && m.id !== mangaId
+      );
+      if (remaining.length === 1) {
+        // Unlink the last remaining volume — make it standalone
+        const lastIdx = this.library.findIndex(m => m.id === remaining[0].id);
+        this.library[lastIdx] = {
+          ...this.library[lastIdx],
+          seriesId: undefined,
+          volumeNumber: undefined
+        };
+      }
+    }
+
+    await this.removeManga(mangaId);
   }
 
   markHasHandle(id: string) {

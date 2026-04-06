@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { ArrowLeft, Palette, Database, Shield, Globe, BarChart2, Download, Upload } from 'lucide-svelte';
+  import { ArrowLeft, Palette, Database, Shield, Globe, BarChart2, Download, Upload, Trash2 } from 'lucide-svelte';
   import ThemeSwitcher from '$lib/components/ThemeSwitcher.svelte';
   import { mangaStore } from '$lib/stores/manga.svelte';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
 
-  let confirmClear = $state(false);
+  let showClearConfirm = $state(false);
 
   const stats = $derived({
     total: mangaStore.library.length,
@@ -44,13 +44,8 @@
   }
 
   function handleClearAll() {
-    if (!confirmClear) {
-      confirmClear = true;
-      setTimeout(() => (confirmClear = false), 4000);
-      return;
-    }
     mangaStore.clearAll();
-    confirmClear = false;
+    showClearConfirm = false;
     goto(`${base}/`);
   }
 </script>
@@ -146,27 +141,58 @@
       </div>
       <p class="text-[var(--text-secondary)] mb-6 -mt-4 text-sm font-body">Dados salvos localmente no seu dispositivo.</p>
 
-      <div class="card p-6 flex items-center justify-between border border-[var(--border)] bg-[var(--bg-secondary)] rounded-[var(--radius)]">
-        <div>
-          <h4 class="font-bold mb-1 font-body">Limpar Biblioteca</h4>
-          <p class="text-xs text-[var(--text-muted)] font-body">
-            {mangaStore.library.length} mangá{mangaStore.library.length !== 1 ? 's' : ''} na biblioteca.
-            {confirmClear ? 'Clique novamente para confirmar.' : 'Remove todos os mangás e o progresso.'}
-          </p>
+      {#if showClearConfirm}
+        <!-- Confirmation panel -->
+        <div class="border border-red-500/40 bg-red-500/5 rounded-[var(--radius)] overflow-hidden">
+          <div class="p-6 flex flex-col gap-4">
+            <div class="flex items-start gap-4">
+              <div class="w-10 h-10 bg-red-500/15 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Trash2 class="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <h4 class="font-bold text-red-400 mb-1 font-body">Isso não pode ser desfeito</h4>
+                <p class="text-sm text-[var(--text-secondary)] font-body leading-relaxed">
+                  Você está prestes a apagar permanentemente
+                  <strong class="text-red-400">{mangaStore.library.length} mangá{mangaStore.library.length !== 1 ? 's' : ''}</strong>,
+                  todo o progresso de leitura e as capas armazenadas.
+                  Os arquivos PDF não serão excluídos do seu dispositivo.
+                </p>
+              </div>
+            </div>
+            <div class="flex items-center justify-end gap-3 pt-2 border-t border-red-500/20">
+              <button
+                onclick={() => (showClearConfirm = false)}
+                class="px-5 py-2 rounded-[var(--radius)] text-sm font-bold border border-[var(--border)] hover:bg-[var(--bg-secondary)] transition-all font-body"
+              >
+                Cancelar
+              </button>
+              <button
+                onclick={handleClearAll}
+                class="px-5 py-2 rounded-[var(--radius)] text-sm font-bold bg-red-500 hover:bg-red-600 text-white transition-all font-body flex items-center gap-2"
+              >
+                <Trash2 class="w-4 h-4" />
+                SIM, APAGAR TUDO
+              </button>
+            </div>
+          </div>
         </div>
-        <button
-          onclick={handleClearAll}
-          disabled={mangaStore.library.length === 0}
-          class={[
-            'px-4 py-2 rounded-[var(--radius)] text-sm font-bold uppercase transition-all',
-            confirmClear
-              ? 'bg-red-500 text-white animate-pulse'
-              : 'border border-red-500/30 text-red-500 hover:bg-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed'
-          ].join(' ')}
-        >
-          {confirmClear ? 'CONFIRMAR' : 'LIMPAR TUDO'}
-        </button>
-      </div>
+      {:else}
+        <div class="card p-6 flex items-center justify-between border border-[var(--border)] bg-[var(--bg-secondary)] rounded-[var(--radius)]">
+          <div>
+            <h4 class="font-bold mb-1 font-body">Limpar Biblioteca</h4>
+            <p class="text-xs text-[var(--text-muted)] font-body">
+              {mangaStore.library.length} mangá{mangaStore.library.length !== 1 ? 's' : ''} · progresso e capas serão perdidos permanentemente.
+            </p>
+          </div>
+          <button
+            onclick={() => (showClearConfirm = true)}
+            disabled={mangaStore.library.length === 0}
+            class="px-4 py-2 rounded-[var(--radius)] text-sm font-bold uppercase border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Limpar Tudo
+          </button>
+        </div>
+      {/if}
     </section>
 
     <!-- Privacy Section -->

@@ -4,13 +4,26 @@
     import { mangaStore } from '$lib/stores/manga.svelte';
     import { PDFService } from '$lib/services/pdf';
     import { PersistenceService } from '$lib/services/persistence';
-    import { ArrowLeft, Plus, BookOpen, Play, Star, Clock, FileUp } from 'lucide-svelte';
+    import { ArrowLeft, Plus, BookOpen, Play, Star, Clock, Trash2 } from 'lucide-svelte';
 
     const seriesId = $derived(page.params.id);
     const series = $derived(mangaStore.getSeries(seriesId));
 
     let isAddingVolume = $state(false);
     let addError = $state<string | null>(null);
+    let deletingVolumeId = $state<string | null>(null);
+
+    function requestDeleteVolume(volId: string, e: MouseEvent) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (deletingVolumeId === volId) {
+            mangaStore.removeVolumeFromSeries(volId);
+            deletingVolumeId = null;
+        } else {
+            deletingVolumeId = volId;
+            setTimeout(() => { if (deletingVolumeId === volId) deletingVolumeId = null; }, 3000);
+        }
+    }
 
     async function handleAddVolume() {
         if (!series) return;
@@ -163,39 +176,55 @@
                 </div>
                 <div class="flex flex-col gap-3">
                     {#each series.volumes as vol}
-                        <a
-                            href="{base}/reader/{vol.id}"
-                            class="flex items-center gap-5 p-4 border border-[var(--border)] rounded-2xl bg-[var(--bg-secondary)] hover:border-[var(--accent)] hover:bg-[var(--bg-accent)]/5 transition-all group"
-                        >
-                            <div class="w-12 h-16 rounded-lg overflow-hidden border border-[var(--border)] flex-shrink-0">
-                                {#if vol.coverUrl}
-                                    <img src={vol.coverUrl} alt={vol.title} class="w-full h-full object-cover" />
-                                {:else}
-                                    <div class="w-full h-full bg-[var(--bg-primary)] flex items-center justify-center">
-                                        <BookOpen class="w-5 h-5 text-[var(--text-muted)]" />
-                                    </div>
-                                {/if}
-                            </div>
-                            <div class="flex-grow min-w-0">
-                                <p class="text-[10px] text-[var(--accent)] font-bold uppercase tracking-widest mb-0.5">Volume {vol.volumeNumber}</p>
-                                <h4 class="font-bold text-sm group-hover:text-[var(--accent)] transition-colors truncate">{vol.title}</h4>
-                                <p class="text-[10px] text-[var(--text-muted)] mt-1">{vol.totalPage} páginas</p>
-                            </div>
-                            <div class="flex-shrink-0 text-right">
-                                {#if vol.progress >= 100}
-                                    <span class="text-[9px] font-bold text-green-500 uppercase tracking-widest">Concluído</span>
-                                {:else if vol.progress > 0}
-                                    <div class="flex flex-col items-end gap-1">
-                                        <span class="text-[10px] font-bold text-[var(--accent)]">{vol.progress}%</span>
-                                        <div class="w-16 h-1 bg-[var(--bg-primary)] rounded-full overflow-hidden">
-                                            <div class="h-full bg-[var(--accent)]" style="width:{vol.progress}%"></div>
+                        <!-- svelte-ignore a11y_no_static_element_interactions -->
+                        <div class="relative group/vol">
+                            <a
+                                href="{base}/reader/{vol.id}"
+                                class="flex items-center gap-5 p-4 border rounded-2xl bg-[var(--bg-secondary)] hover:bg-[var(--bg-accent)]/5 transition-all group {deletingVolumeId === vol.id ? 'border-red-500/60' : 'border-[var(--border)] hover:border-[var(--accent)]'}"
+                            >
+                                <div class="w-12 h-16 rounded-lg overflow-hidden border border-[var(--border)] flex-shrink-0">
+                                    {#if vol.coverUrl}
+                                        <img src={vol.coverUrl} alt={vol.title} class="w-full h-full object-cover" />
+                                    {:else}
+                                        <div class="w-full h-full bg-[var(--bg-primary)] flex items-center justify-center">
+                                            <BookOpen class="w-5 h-5 text-[var(--text-muted)]" />
                                         </div>
-                                    </div>
-                                {:else}
-                                    <span class="text-[9px] text-[var(--text-muted)] uppercase tracking-widest">Não iniciado</span>
-                                {/if}
-                            </div>
-                        </a>
+                                    {/if}
+                                </div>
+                                <div class="flex-grow min-w-0">
+                                    <p class="text-[10px] text-[var(--accent)] font-bold uppercase tracking-widest mb-0.5">Volume {vol.volumeNumber}</p>
+                                    <h4 class="font-bold text-sm group-hover:text-[var(--accent)] transition-colors truncate">{vol.title}</h4>
+                                    <p class="text-[10px] text-[var(--text-muted)] mt-1">{vol.totalPage} páginas</p>
+                                </div>
+                                <div class="flex-shrink-0 text-right pr-8">
+                                    {#if vol.progress >= 100}
+                                        <span class="text-[9px] font-bold text-green-500 uppercase tracking-widest">Concluído</span>
+                                    {:else if vol.progress > 0}
+                                        <div class="flex flex-col items-end gap-1">
+                                            <span class="text-[10px] font-bold text-[var(--accent)]">{vol.progress}%</span>
+                                            <div class="w-16 h-1 bg-[var(--bg-primary)] rounded-full overflow-hidden">
+                                                <div class="h-full bg-[var(--accent)]" style="width:{vol.progress}%"></div>
+                                            </div>
+                                        </div>
+                                    {:else}
+                                        <span class="text-[9px] text-[var(--text-muted)] uppercase tracking-widest">Não iniciado</span>
+                                    {/if}
+                                </div>
+                            </a>
+                            <!-- Delete — only visible when series has > 1 volume -->
+                            {#if series.volumes.length > 1}
+                                <button
+                                    onclick={(e) => requestDeleteVolume(vol.id, e)}
+                                    title={deletingVolumeId === vol.id ? 'Confirmar remoção' : 'Remover volume'}
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center transition-all z-10
+                                        {deletingVolumeId === vol.id
+                                            ? 'bg-red-500 text-white opacity-100 scale-110'
+                                            : 'bg-[var(--bg-primary)] border border-[var(--border)] text-[var(--text-muted)] opacity-0 group-hover/vol:opacity-100 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30'}"
+                                >
+                                    <Trash2 class="w-3.5 h-3.5" />
+                                </button>
+                            {/if}
+                        </div>
                     {/each}
                 </div>
             </div>
