@@ -148,13 +148,13 @@
 			case 'j':
 				readingMode === 'vertical'
 					? verticalContainer?.scrollBy({ top: window.innerHeight * 0.8, behavior: 'smooth' })
-					: nextPage();
+					: prevPage();
 				break;
 			case 'ArrowUp':
 			case 'k':
 				readingMode === 'vertical'
 					? verticalContainer?.scrollBy({ top: -window.innerHeight * 0.8, behavior: 'smooth' })
-					: prevPage();
+					: nextPage();
 				break;
 			case '=':
 			case '+': zoomIn(); break;
@@ -510,19 +510,22 @@
 			onscroll={handleVerticalScroll}
 			onclick={() => (isControlsVisible = !isControlsVisible)}
 		>
-			<div class="flex flex-col items-center">
+			<!-- Inner column: max-width 900 px at zoom=1, scales with zoom -->
+			<div
+				class="flex flex-col mx-auto"
+				style="width: 100%; max-width: {Math.round(zoomLevel * 900)}px;"
+			>
 				{#each verticalPages as src, i}
-					<div class="w-full flex justify-center" data-page={i + 1}>
+					<div class="w-full" data-page={i + 1}>
 						{#if src}
 							<img
 								src={src}
 								alt="Página {i + 1}"
-								class="block h-auto"
-								style="width: {zoomLevel <= 1 ? '100%' : `${zoomLevel * 100}%`}; max-width: none;"
+								class="w-full h-auto block"
 								draggable="false"
 							/>
 						{:else}
-							<div class="w-full max-w-2xl aspect-[3/4] bg-white/[0.03] flex items-center justify-center">
+							<div class="w-full aspect-[3/4] bg-white/[0.03] flex items-center justify-center">
 								<Loader2 class="w-5 h-5 text-white/20 animate-spin" />
 							</div>
 						{/if}
