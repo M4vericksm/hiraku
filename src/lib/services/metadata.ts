@@ -4,6 +4,9 @@ export interface MangaMetadata {
   coverUrl: string;
   description: string;
   author?: string;
+  genres?: string[];
+  status?: string;
+  averageScore?: number;
 }
 
 export class MetadataService {
@@ -23,6 +26,9 @@ export class MetadataService {
               large
             }
             description
+            genres
+            status
+            averageScore
             staff {
               nodes {
                 name {
@@ -51,7 +57,10 @@ export class MetadataService {
         title: m.title.english || m.title.romaji,
         coverUrl: m.coverImage.large,
         description: m.description,
-        author: m.staff?.nodes[0]?.name?.full
+        author: m.staff?.nodes[0]?.name?.full,
+        genres: m.genres?.slice(0, 5) ?? [],
+        status: m.status,
+        averageScore: m.averageScore
       }));
     } catch (err) {
       console.error('Erro AniList', err);
