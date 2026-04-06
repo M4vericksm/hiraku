@@ -51,19 +51,19 @@ class MangaStore {
         console.error('Falha ao processar biblioteca', e);
       }
     }
-    this.isLoading = false;
-    // Async: load covers from IndexedDB and migrate old base64 covers
+    // isLoading will be set to false by loadCovers() after covers are ready
     this.loadCovers();
   }
 
   private async loadCovers() {
+    let needsSave = false;
     for (let i = 0; i < this.library.length; i++) {
       const manga = this.library[i];
       // Migrate: if coverUrl is a long base64, move it to IndexedDB
       if (manga.coverUrl && manga.coverUrl.startsWith('data:')) {
         await PersistenceService.saveCover(manga.id, manga.coverUrl);
         this.library[i] = { ...manga, coverUrl: undefined };
-        this.saveToStorage(); // save without base64
+        needsSave = true;
       }
       // Load cover from IndexedDB
       const cover = await PersistenceService.getCover(manga.id);
@@ -71,6 +71,8 @@ class MangaStore {
         this.library[i] = { ...this.library[i], coverUrl: cover };
       }
     }
+    if (needsSave) this.saveToStorage(); // single write after full migration
+    this.isLoading = false;
   }
 
   saveToStorage() {

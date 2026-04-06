@@ -29,7 +29,7 @@ export class MetadataService {
             genres
             status
             averageScore
-            staff(perPage: 1) {
+            staff {
               nodes {
                 name {
                   full
