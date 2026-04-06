@@ -24,7 +24,7 @@ export class MetadataService {
           media(search: $search, type: MANGA, sort: SEARCH_MATCH) {
             id
             title { romaji english native }
-            coverImage { large medium }
+            coverImage { extraLarge large medium }
             description(asHtml: false)
             genres
             status
@@ -71,7 +71,7 @@ export class MetadataService {
         id: String(m.id),
         // Prefer English title, fall back to romaji, then native
         title: m.title?.english || m.title?.romaji || m.title?.native || 'Sem título',
-        coverUrl: m.coverImage?.large || m.coverImage?.medium || '',
+        coverUrl: m.coverImage?.extraLarge || m.coverImage?.large || m.coverImage?.medium || '',
         description: m.description ?? '',
         author: m.staff?.nodes?.[0]?.name?.full ?? undefined,
         genres: Array.isArray(m.genres) ? m.genres.slice(0, 5) : [],

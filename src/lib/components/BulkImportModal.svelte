@@ -21,7 +21,8 @@
 		anilistResults: MangaMetadata[];
 		pageCount: number;
 		bookmarks: PDFBookmark[];
-		previewUrl: string;
+		previewUrl: string;    // tiny thumbnail for the import list UI (scale 0.2)
+		coverUrl: string;      // full-quality cover to store (scale 1.5, or AniList URL)
 		error?: string;
 	}
 
@@ -95,6 +96,7 @@
 			pageCount: 0,
 			bookmarks: [],
 			previewUrl: '',
+			coverUrl: '',
 		};
 	}
 
@@ -116,7 +118,10 @@
 			const meta = await PDFService.getMetadata(doc);
 			items[idx()].pageCount = meta.pageCount;
 			items[idx()].bookmarks = meta.bookmarks;
+			// Small thumbnail just for the import list UI
 			items[idx()].previewUrl = await PDFService.getPageAsImage(doc, 1, 0.2);
+			// High-quality cover used when AniList has no match (scale 1.5 ≈ 900px tall)
+			items[idx()].coverUrl = await PDFService.getPageAsImage(doc, 1, 1.5);
 
 			items[idx()].status = 'identifying';
 			await runAniListSearch(item.id);
@@ -158,11 +163,11 @@
 			items[j].metadata = results[0]; // pre-select first as default
 			items[j].status = 'identifying';
 		} else {
-			// No results — fall back to local data; user can still re-search
+			// No results — fall back to local data using high-quality PDF cover
 			items[j].metadata = {
 				id: crypto.randomUUID(),
 				title: items[j].suggestedTitle || items[j].file.name.replace(/\.[^/.]+$/, ''),
-				coverUrl: items[j].previewUrl,
+				coverUrl: items[j].coverUrl || items[j].previewUrl,
 				description: '',
 				author: undefined,
 			};
@@ -192,7 +197,8 @@
 				anilistId: item.metadata!.id,
 				title: item.metadata!.title,
 				author: item.metadata!.author,
-				coverUrl: item.metadata!.coverUrl,
+				// Use AniList cover if available; otherwise use high-quality PDF render
+				coverUrl: item.metadata!.coverUrl || item.coverUrl,
 				description: item.metadata!.description,
 				genres: (item.metadata as any).genres,
 				status: (item.metadata as any).status,

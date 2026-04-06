@@ -29,7 +29,8 @@
 		unread: 'Não iniciados',
 	};
 
-	const filteredLibrary = $derived(() => {
+	// $derived.by() executes the callback and tracks reactive dependencies properly
+	const filteredLibrary = $derived.by(() => {
 		let list = mangaStore.library.filter((m) =>
 			m.title.toLowerCase().includes(searchQuery.toLowerCase())
 		);
@@ -58,7 +59,7 @@
 
 	// Standalone manga (not part of a series)
 	const standaloneManga = $derived(
-		filteredLibrary().filter(m => !m.seriesId)
+		filteredLibrary.filter(m => !m.seriesId)
 	);
 
 	// All series, filtered by search if applicable

@@ -129,6 +129,8 @@
 		root?.removeEventListener('touchmove', handleTouchMove);
 		clearTimeout(controlsTimeout);
 		document.body.style.overflow = '';
+		// Exit fullscreen if active so it doesn't leak to other pages
+		if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
 	});
 
 	// ── Keyboard ──────────────────────────────────────────────────────────
