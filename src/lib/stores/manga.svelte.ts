@@ -19,6 +19,9 @@ export interface Manga {
 	lastReadAt?: string;
 	bookmarks: PDFBookmark[];
 	hasHandle?: boolean;
+	genres?: string[];
+	status?: string;
+	averageScore?: number;
 }
 
 class MangaStore {
@@ -83,6 +86,22 @@ class MangaStore {
 		await PersistenceService.removeHandle(id);
 		this.library = this.library.filter((m) => m.id !== id);
 		this.saveToStorage();
+	}
+
+	markHasHandle(id: string) {
+		const idx = this.library.findIndex(m => m.id === id);
+		if (idx !== -1) {
+			this.library[idx] = { ...this.library[idx], hasHandle: true };
+			this.saveToStorage();
+		}
+	}
+
+	updateMeta(id: string, meta: Partial<Manga>) {
+		const idx = this.library.findIndex(m => m.id === id);
+		if (idx !== -1) {
+			this.library[idx] = { ...this.library[idx], ...meta };
+			this.saveToStorage();
+		}
 	}
 
 	clearAll() {

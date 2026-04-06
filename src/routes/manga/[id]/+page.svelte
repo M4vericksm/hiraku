@@ -2,14 +2,22 @@
 	import { page } from '$app/state';
 	import { base } from '$app/paths';
 	import { mangaStore } from '$lib/stores/manga.svelte';
-	import { ArrowLeft, BookOpen, Clock, Tag, ChevronRight, Play, Database } from 'lucide-svelte';
+	import { ArrowLeft, BookOpen, Clock, Tag, ChevronRight, Play, Database, Search } from 'lucide-svelte';
+	import MetadataSearchModal from '$lib/components/MetadataSearchModal.svelte';
 	import { cn } from '$lib/utils';
 
 	const id = $derived(page.params.id);
 	const manga = $derived(mangaStore.library.find((m) => m.id === id));
+	let isMetaModalOpen = $state(false);
 </script>
 
 {#if manga}
+	<MetadataSearchModal
+		mangaId={manga.id}
+		currentTitle={manga.title}
+		isOpen={isMetaModalOpen}
+		onClose={() => (isMetaModalOpen = false)}
+	/>
 	<article class="min-h-screen pb-24 text-[var(--text-primary)] font-body">
 		<!-- Hero Section -->
 		<div class="relative h-[450px] overflow-hidden">
@@ -46,14 +54,21 @@
 					</div>
 					
 					<!-- Main CTA -->
-					<div class="pb-4 md:pb-6 flex-shrink-0">
-						<a 
-							href="{base}/reader/{manga.id}" 
+					<div class="pb-4 md:pb-6 flex-shrink-0 flex flex-col gap-3">
+						<a
+							href="{base}/reader/{manga.id}"
 							class="btn-primary flex items-center gap-4 px-10 py-5 text-lg font-black shadow-[0_20px_40px_rgba(0,0,0,0.3)] rounded-2xl group"
 						>
 							<Play class="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
 							{manga.progress > 0 ? 'CONTINUAR LENDO' : 'COMEÇAR LEITURA'}
 						</a>
+						<button
+							onclick={() => (isMetaModalOpen = true)}
+							class="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] transition-all text-sm font-bold"
+						>
+							<Search class="w-4 h-4" />
+							Buscar Metadados
+						</button>
 					</div>
 				</div>
 			</div>
@@ -142,6 +157,27 @@
 								<p class="text-sm font-bold truncate max-w-[150px]">{manga.filePath}</p>
 							</div>
 						</div>
+						{#if manga.status}
+							<div class="flex items-center gap-4">
+								<div class="w-8 h-8 rounded-lg bg-[var(--bg-primary)] flex items-center justify-center text-[var(--accent)] border border-[var(--border)]">
+									<BookOpen class="w-4 h-4" />
+								</div>
+								<div>
+									<p class="text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-bold">Status</p>
+									<p class="text-sm font-bold">{manga.status === 'FINISHED' ? 'Finalizado' : manga.status === 'RELEASING' ? 'Em lançamento' : manga.status}</p>
+								</div>
+							</div>
+						{/if}
+						{#if manga.genres && manga.genres.length > 0}
+							<div>
+								<p class="text-[9px] text-[var(--text-muted)] uppercase tracking-widest font-bold mb-2">Gêneros</p>
+								<div class="flex flex-wrap gap-1.5">
+									{#each manga.genres as genre}
+										<span class="text-[9px] px-2 py-1 bg-[var(--bg-primary)] border border-[var(--border)] rounded-full uppercase tracking-widest">{genre}</span>
+									{/each}
+								</div>
+							</div>
+						{/if}
 					</div>
 				</section>
 			</aside>

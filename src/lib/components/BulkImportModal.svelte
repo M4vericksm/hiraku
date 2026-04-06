@@ -18,12 +18,51 @@
 		pageCount: number;
 		bookmarks: PDFBookmark[];
 		previewUrl: string;
+		anilistResults: MangaMetadata[];
 		error?: string;
 	}
 
 	let items = $state<ImportItem[]>([]);
 	let isComplete = $derived(items.length > 0 && items.every(i => i.status === 'ready' || i.status === 'error'));
 	let readyCount = $derived(items.filter(i => i.status === 'ready').length);
+
+	let fileInputEl: HTMLInputElement;
+
+	async function handleFilePicker() {
+		if (!('showOpenFilePicker' in window)) {
+			fileInputEl?.click();
+			return;
+		}
+		try {
+			const handles: FileSystemFileHandle[] = await (window as any).showOpenFilePicker({
+				multiple: true,
+				types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }]
+			});
+			const newItems: ImportItem[] = await Promise.all(handles.map(async (handle) => {
+				const file = await handle.getFile();
+				return {
+					id: crypto.randomUUID(),
+					file,
+					handle,
+					status: 'pending' as const,
+					progress: 0,
+					suggestedTitle: file.name,
+					metadata: null,
+					pageCount: 0,
+					bookmarks: [],
+					previewUrl: '',
+					anilistResults: []
+				};
+			}));
+			items = [...items, ...newItems];
+			processQueue();
+		} catch (e: any) {
+			if (e?.name !== 'AbortError') {
+				console.error('Erro ao selecionar arquivos', e);
+				fileInputEl?.click(); // fallback
+			}
+		}
+	}
 
 	async function handleFileSelect(e: Event) {
 		const target = e.target as HTMLInputElement;
@@ -32,13 +71,14 @@
 			const newItems: ImportItem[] = newFiles.map(file => ({
 				id: crypto.randomUUID(),
 				file,
-				status: 'pending',
+				status: 'pending' as const,
 				progress: 0,
 				suggestedTitle: file.name,
 				metadata: null,
 				pageCount: 0,
 				bookmarks: [],
-				previewUrl: ''
+				previewUrl: '',
+				anilistResults: []
 			}));
 			items = [...items, ...newItems];
 			processQueue();
@@ -71,10 +111,12 @@
 			
 			const results = await MetadataService.searchAniList(rawTitle);
 			if (results.length > 0) {
+				items[idx].anilistResults = results;
 				items[idx].metadata = results[0];
-				items[idx].status = 'ready';
+				// If multiple results, keep status as 'identifying' so user can pick
+				items[idx].status = results.length > 1 ? 'identifying' : 'ready';
 			} else {
-				// Fallback metadata if search fails
+				items[idx].anilistResults = [];
 				items[idx].metadata = {
 					id: crypto.randomUUID(),
 					title: rawTitle,
@@ -93,6 +135,14 @@
 
 	function removeItem(id: string) {
 		items = items.filter(i => i.id !== id);
+	}
+
+	function selectResult(itemId: string, result: MangaMetadata) {
+		const idx = items.findIndex(i => i.id === itemId);
+		if (idx !== -1) {
+			items[idx].metadata = result;
+			items[idx].status = 'ready';
+		}
 	}
 
 	async function handleConfirmAll() {
@@ -146,7 +196,8 @@
             metadata: null,
             pageCount: 0,
             bookmarks: [],
-            previewUrl: ''
+            previewUrl: '',
+            anilistResults: []
           });
         }
       }
@@ -180,14 +231,14 @@
 			<div class="flex-grow overflow-y-auto p-8 custom-scrollbar">
 				{#if items.length === 0}
 					<div class="flex flex-col md:flex-row gap-6 mt-10">
-						<label class="flex-1 flex flex-col items-center justify-center py-16 px-6 border-2 border-dashed border-[var(--border)] rounded-2xl group hover:border-[var(--accent)] cursor-pointer transition-all bg-[var(--bg-secondary)]/30 hover:bg-[var(--bg-secondary)]/50">
+						<button onclick={handleFilePicker} class="flex-1 flex flex-col items-center justify-center py-16 px-6 border-2 border-dashed border-[var(--border)] rounded-2xl group hover:border-[var(--accent)] cursor-pointer transition-all bg-[var(--bg-secondary)]/30 hover:bg-[var(--bg-secondary)]/50">
 							<div class="w-16 h-16 bg-[var(--bg-primary)] border border-[var(--border)] rounded-full flex items-center justify-center mb-6 shadow-sm group-hover:scale-110 group-hover:border-[var(--accent)] transition-all">
 								<BookOpen class="w-8 h-8 text-[var(--text-muted)] group-hover:text-[var(--accent)]" />
 							</div>
 							<h3 class="text-lg font-bold mb-1">Arquivos PDF</h3>
 							<p class="text-xs text-[var(--text-muted)] uppercase tracking-widest">Selecionar múltiplos arquivos</p>
-							<input type="file" accept="application/pdf" multiple class="hidden" onchange={handleFileSelect} />
-						</label>
+							<input type="file" accept="application/pdf" multiple class="hidden" bind:this={fileInputEl} onchange={handleFileSelect} />
+						</button>
 
 						<button 
               onclick={handleDirectoryPicker}
@@ -212,7 +263,7 @@
 									{#if item.previewUrl}
 										<img src={item.previewUrl} alt="Preview" class="w-full h-full object-cover" />
 									{/if}
-									{#if item.status === 'processing' || item.status === 'identifying'}
+									{#if item.status === 'processing' || (item.status === 'identifying' && item.anilistResults.length === 0)}
 										<div class="absolute inset-0 bg-black/60 flex items-center justify-center">
 											<Loader2 class="w-6 h-6 text-[var(--accent)] animate-spin" />
 										</div>
@@ -240,6 +291,22 @@
 												{#if item.error}
 													<p class="text-[8px] text-red-400 line-clamp-1 italic">{item.error}</p>
 												{/if}
+											</div>
+										{:else if item.status === 'identifying' && item.anilistResults.length > 1}
+											<div class="flex flex-col gap-2 mt-2">
+												<p class="text-[8px] text-[var(--text-muted)] uppercase tracking-widest">Escolha o correto:</p>
+												<div class="flex gap-1.5 flex-wrap">
+													{#each item.anilistResults.slice(0, 4) as result}
+														<button
+															onclick={() => selectResult(item.id, result)}
+															class="flex flex-col items-center gap-1 group/r"
+															title={result.title}
+														>
+															<img src={result.coverUrl} alt={result.title} class="w-8 h-10 object-cover rounded border border-[var(--border)] group-hover/r:border-[var(--accent)] transition-colors" />
+															<span class="text-[7px] text-[var(--text-muted)] line-clamp-1 w-8 text-center">{result.title.split(':')[0]}</span>
+														</button>
+													{/each}
+												</div>
 											</div>
 										{:else}
 											<div class="w-full bg-[var(--bg-primary)] h-1 rounded-full overflow-hidden border border-[var(--border)]">

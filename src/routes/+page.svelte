@@ -181,7 +181,7 @@
 
 		<section>
 			<h3 class="text-xl mb-6 opacity-60 uppercase tracking-widest text-sm">Minha Biblioteca</h3>
-			<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+			<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
 				{#each filteredLibrary() as manga}
 					<div class="group cursor-pointer relative">
 						<a href="{base}/manga/{manga.id}">

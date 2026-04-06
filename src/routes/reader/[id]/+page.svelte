@@ -48,6 +48,7 @@
 		document.removeEventListener('keydown', handleKeyDown);
 		document.removeEventListener('fullscreenchange', handleFullscreenChange);
 		clearTimeout(controlsTimeout);
+		document.body.style.overflow = '';
 	});
 
 	function handleKeyDown(e: KeyboardEvent) {
@@ -157,15 +158,24 @@
 		isLoading = false;
 	}
 
-	async function handleReupload(e: Event) {
-		const target = e.target as HTMLInputElement;
-		if (target.files && target.files[0] && manga) {
-			const file = target.files[0];
+	async function handleReupload() {
+		if (!manga) return;
+		try {
+			const [handle] = await (window as any).showOpenFilePicker({
+				types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }]
+			});
+			await PersistenceService.saveHandle(manga.id, handle);
+			mangaStore.markHasHandle(manga.id);
+			const file = await handle.getFile();
 			error = null;
 			isLoading = true;
 			pdfDoc = await PDFService.loadDocument(file);
 			await renderPage();
 			isLoading = false;
+		} catch (e: any) {
+			if (e?.name !== 'AbortError') {
+				error = 'Não foi possível abrir o arquivo selecionado.';
+			}
 		}
 	}
 
@@ -327,11 +337,10 @@
 					<h3 class="font-bold text-lg mb-2">Arquivo não disponível</h3>
 					<p class="text-sm text-[var(--text-secondary)]">{error}</p>
 				</div>
-				<label class="btn-primary w-full flex items-center justify-center gap-3 cursor-pointer py-4">
+				<button onclick={handleReupload} class="btn-primary w-full flex items-center justify-center gap-3 py-4">
 					<FileUp class="w-5 h-5" />
 					SELECIONAR ARQUIVO NOVAMENTE
-					<input type="file" accept="application/pdf" class="hidden" onchange={handleReupload} />
-				</label>
+				</button>
 			</div>
 		{:else}
 			<div class="relative shadow-[0_0_100px_rgba(0,0,0,0.5)] max-w-full">
