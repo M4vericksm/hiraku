@@ -1,272 +1,147 @@
-import { PersistenceService } from '../services/persistence';
-
-export interface PDFBookmark {
-  title: string;
-  pageNumber: number;
-}
+const STORAGE_KEY = 'hiraku-library';
 
 export interface Manga {
-  id: string;
-  title: string;
-  author?: string;
-  coverUrl?: string;       // loaded at runtime from IndexedDB, not persisted to localStorage
-  description?: string;
-  progress: number;
-  lastReadPage: number;
-  totalPage: number;
-  filePath: string;
-  addedAt: string;
-  lastReadAt?: string;
-  bookmarks: PDFBookmark[];
-  hasHandle?: boolean;
-  genres?: string[];
-  status?: string;
-  averageScore?: number;
-  seriesId?: string;       // UUID linking volumes of the same series
-  volumeNumber?: number;   // 1, 2, 3... (undefined = standalone)
-}
-
-export interface Series {
-  id: string;
-  title: string;
-  author?: string;
-  description?: string;
-  genres?: string[];
-  status?: string;
-  averageScore?: number;
-  volumes: Manga[];        // sorted by volumeNumber
+	id: string; // source_manga_id
+	source: string; // mangadex, mangalivre, ...
+	title: string;
+	author?: string;
+	coverUrl?: string;
+	description?: string;
+	/** Progresso dentro do capitulo atual, em porcentagem. */
+	progress: number;
+	lastReadPage: number;
+	totalPage: number;
+	/** Capitulo em leitura, para o botao "continuar lendo" retomar no lugar certo. */
+	lastChapterId?: string;
+	lastChapterLabel?: string;
+	/** Capitulos ja concluidos, usados para marcar a lista de capitulos. */
+	readChapterIds?: string[];
+	addedAt: string;
+	lastReadAt?: string;
+	genres?: string[];
+	status?: string;
+	averageScore?: number;
 }
 
 class MangaStore {
-  library = $state<Manga[]>([]);
-  isLoading = $state(true);
+	library = $state<Manga[]>([]);
+	isLoading = $state(true);
 
-  constructor() {
-    if (typeof window === 'undefined') return;
-    const saved = localStorage.getItem('hiraku-library');
-    if (saved) {
-      try {
-        this.library = JSON.parse(saved);
-      } catch (e) {
-        console.error('Falha ao processar biblioteca', e);
-      }
-    }
-    this.isLoading = false;
-    // Async: load covers from IndexedDB and migrate old base64 covers
-    this.loadCovers();
-  }
+	constructor() {
+		if (typeof window === 'undefined') {
+			this.isLoading = false;
+			return;
+		}
+		const saved = localStorage.getItem(STORAGE_KEY);
+		if (saved) {
+			try {
+				this.library = JSON.parse(saved);
+			} catch (e) {
+				console.error('Falha ao processar biblioteca', e);
+			}
+		}
+		this.isLoading = false;
+	}
 
-  private async loadCovers() {
-    for (let i = 0; i < this.library.length; i++) {
-      const manga = this.library[i];
-      // Migrate: if coverUrl is a long base64, move it to IndexedDB
-      if (manga.coverUrl && manga.coverUrl.startsWith('data:')) {
-        await PersistenceService.saveCover(manga.id, manga.coverUrl);
-        this.library[i] = { ...manga, coverUrl: undefined };
-        this.saveToStorage(); // save without base64
-      }
-      // Load cover from IndexedDB
-      const cover = await PersistenceService.getCover(manga.id);
-      if (cover) {
-        this.library[i] = { ...this.library[i], coverUrl: cover };
-      }
-    }
-  }
+	saveToStorage() {
+		if (typeof window === 'undefined') return;
+		try {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(this.library));
+		} catch (e: unknown) {
+			console.error('Falha ao salvar biblioteca', e);
+		}
+	}
 
-  saveToStorage() {
-    if (typeof window === 'undefined') return;
-    // Strip coverUrl before persisting (covers live in IndexedDB)
-    const stripped = this.library.map(({ coverUrl: _, ...m }) => m);
-    try {
-      localStorage.setItem('hiraku-library', JSON.stringify(stripped));
-    } catch (e: any) {
-      if (e?.name === 'QuotaExceededError' || e?.code === 22) {
-        console.error('localStorage cheio mesmo sem capas');
-      }
-    }
-  }
+	private indexOf(id: string, source: string): number {
+		return this.library.findIndex((m) => m.id === id && m.source === source);
+	}
 
-  async addManga(manga: Manga, handle?: FileSystemFileHandle) {
-    if (handle) {
-      await PersistenceService.saveHandle(manga.id, handle);
-      manga.hasHandle = true;
-    }
-    if (manga.coverUrl) {
-      await PersistenceService.saveCover(manga.id, manga.coverUrl);
-      // keep coverUrl in memory but not in localStorage (handled by saveToStorage strip)
-    }
-    this.library = [manga, ...this.library];
-    this.saveToStorage();
-  }
+	find(id: string, source: string): Manga | undefined {
+		return this.library.find((m) => m.id === id && m.source === source);
+	}
 
-  async addMangas(mangas: { manga: Manga; handle?: FileSystemFileHandle }[]) {
-    for (const item of mangas) {
-      if (item.handle) {
-        await PersistenceService.saveHandle(item.manga.id, item.handle);
-        item.manga.hasHandle = true;
-      }
-      if (item.manga.coverUrl) {
-        await PersistenceService.saveCover(item.manga.id, item.manga.coverUrl);
-      }
-    }
-    this.library = [...mangas.map(m => m.manga), ...this.library];
-    this.saveToStorage();
-  }
+	addManga(manga: Manga) {
+		const existingIndex = this.indexOf(manga.id, manga.source);
+		if (existingIndex >= 0) {
+			this.library[existingIndex] = { ...this.library[existingIndex], ...manga };
+		} else {
+			this.library = [manga, ...this.library];
+		}
+		this.saveToStorage();
+	}
 
-  updateProgress(id: string, page: number, total: number) {
-    const index = this.library.findIndex((m) => m.id === id);
-    if (index !== -1) {
-      const manga = this.library[index];
-      this.library[index] = {
-        ...manga,
-        lastReadPage: page,
-        totalPage: total,
-        progress: Math.round((page / total) * 100),
-        lastReadAt: new Date().toISOString()
-      };
-      this.saveToStorage();
-    }
-  }
+	/**
+	 * Atualiza a posicao de leitura. Só mexe em mangás que estão na biblioteca —
+	 * ler algo do catálogo não deve adicioná-lo automaticamente.
+	 */
+	updateProgress(
+		id: string,
+		source: string,
+		page: number,
+		total: number,
+		chapter?: { id: string; label?: string }
+	) {
+		const index = this.indexOf(id, source);
+		if (index === -1) return;
 
-  async removeManga(id: string) {
-    await PersistenceService.removeHandle(id);
-    await PersistenceService.removeCover(id);
-    this.library = this.library.filter((m) => m.id !== id);
-    this.saveToStorage();
-  }
+		const manga = this.library[index];
+		this.library[index] = {
+			...manga,
+			lastReadPage: page,
+			totalPage: total,
+			progress: total > 0 ? Math.round((page / total) * 100) : 0,
+			lastChapterId: chapter?.id ?? manga.lastChapterId,
+			lastChapterLabel: chapter?.label ?? manga.lastChapterLabel,
+			lastReadAt: new Date().toISOString()
+		};
+		this.saveToStorage();
+	}
 
-  markHasHandle(id: string) {
-    const idx = this.library.findIndex(m => m.id === id);
-    if (idx !== -1) {
-      this.library[idx] = { ...this.library[idx], hasHandle: true };
-      this.saveToStorage();
-    }
-  }
+	/** Marca um capitulo como lido (idempotente). */
+	markChapterRead(id: string, source: string, chapterId: string) {
+		const index = this.indexOf(id, source);
+		if (index === -1) return;
 
-  updateMeta(id: string, meta: Partial<Manga>) {
-    const idx = this.library.findIndex(m => m.id === id);
-    if (idx !== -1) {
-      // If new cover provided, save to IndexedDB
-      if (meta.coverUrl) {
-        PersistenceService.saveCover(id, meta.coverUrl);
-      }
-      this.library[idx] = { ...this.library[idx], ...meta };
-      this.saveToStorage();
-    }
-  }
+		const manga = this.library[index];
+		const read = manga.readChapterIds ?? [];
+		if (read.includes(chapterId)) return;
 
-  clearAll() {
-    // Clean up all covers from IndexedDB
-    for (const manga of this.library) {
-      PersistenceService.removeCover(manga.id);
-      PersistenceService.removeHandle(manga.id);
-    }
-    this.library = [];
-    localStorage.removeItem('hiraku-library');
-  }
+		this.library[index] = { ...manga, readChapterIds: [...read, chapterId] };
+		this.saveToStorage();
+	}
 
-  // ─── Series / Volumes ──────────────────────────────────────────────
+	isChapterRead(id: string, source: string, chapterId: string): boolean {
+		return this.find(id, source)?.readChapterIds?.includes(chapterId) ?? false;
+	}
 
-  /**
-   * Convert a standalone manga into Volume 1 of a new series.
-   * Returns the new seriesId.
-   */
-  createSeries(mangaId: string): string {
-    const idx = this.library.findIndex(m => m.id === mangaId);
-    if (idx === -1) return '';
-    const seriesId = `series-${crypto.randomUUID()}`;
-    this.library[idx] = { ...this.library[idx], seriesId, volumeNumber: 1 };
-    this.saveToStorage();
-    return seriesId;
-  }
+	removeManga(id: string, source: string) {
+		this.library = this.library.filter((m) => !(m.id === id && m.source === source));
+		this.saveToStorage();
+	}
 
-  /**
-   * Add a new volume to an existing series.
-   * seriesId: the target series
-   * manga: the new volume Manga object (with seriesId + volumeNumber already set)
-   * handle: optional FileSystemFileHandle for the PDF
-   */
-  async addVolumeToSeries(manga: Manga, handle?: FileSystemFileHandle) {
-    // Determine next volume number if not provided
-    if (!manga.volumeNumber) {
-      const existing = this.library.filter(m => m.seriesId === manga.seriesId);
-      manga.volumeNumber = existing.length + 1;
-    }
-    await this.addManga(manga, handle);
-  }
+	updateMeta(id: string, source: string, meta: Partial<Manga>) {
+		const idx = this.indexOf(id, source);
+		if (idx !== -1) {
+			this.library[idx] = { ...this.library[idx], ...meta };
+			this.saveToStorage();
+		}
+	}
 
-  /** All series derived from the library */
-  get seriesList(): Series[] {
-    const map = new Map<string, Manga[]>();
-    for (const manga of this.library) {
-      if (manga.seriesId) {
-        if (!map.has(manga.seriesId)) map.set(manga.seriesId, []);
-        map.get(manga.seriesId)!.push(manga);
-      }
-    }
-    return [...map.entries()].map(([id, vols]) => {
-      const sorted = [...vols].sort((a, b) => (a.volumeNumber ?? 0) - (b.volumeNumber ?? 0));
-      const first = sorted[0];
-      return {
-        id,
-        title: first.title
-          .replace(/[\s\-–]*[Vv]ol(ume)?\.?\s*\d+.*$/i, '')
-          .replace(/[\s\-–]+$/, '')
-          .trim() || first.title,
-        author: first.author,
-        description: first.description,
-        genres: first.genres,
-        status: first.status,
-        averageScore: first.averageScore,
-        volumes: sorted
-      };
-    });
-  }
+	clearAll() {
+		this.library = [];
+		if (typeof window !== 'undefined') localStorage.removeItem(STORAGE_KEY);
+	}
 
-  /** Series by ID */
-  getSeries(seriesId: string): Series | undefined {
-    return this.seriesList.find(s => s.id === seriesId);
-  }
-
-  // ─── Export / Import ───────────────────────────────────────────────
-
-  exportLibrary(): string {
-    return JSON.stringify(
-      { version: '1', exportedAt: new Date().toISOString(), library: this.library.map(({ coverUrl: _, ...m }) => m) },
-      null,
-      2
-    );
-  }
-
-  importLibrary(json: string): { ok: boolean; count: number; error?: string } {
-    try {
-      const data = JSON.parse(json);
-      if (!data.version || !Array.isArray(data.library)) {
-        return { ok: false, count: 0, error: 'Arquivo inválido ou não é um backup do Hiraku.' };
-      }
-      const incoming: Manga[] = data.library;
-      const existingIds = new Set(this.library.map((m) => m.id));
-      const newEntries = incoming.filter((m) => !existingIds.has(m.id));
-      this.library = [...newEntries.map((m) => ({ ...m, hasHandle: false, coverUrl: undefined })), ...this.library];
-      this.saveToStorage();
-      return { ok: true, count: newEntries.length };
-    } catch {
-      return { ok: false, count: 0, error: 'Não foi possível ler o arquivo de backup.' };
-    }
-  }
-
-  // ─── Getters ───────────────────────────────────────────────────────
-
-  get recentManga(): Manga[] {
-    return [...this.library]
-      .filter((m) => m.lastReadAt || m.lastReadPage > 1)
-      .sort((a, b) => {
-        const dA = a.lastReadAt ? new Date(a.lastReadAt).getTime() : 0;
-        const dB = b.lastReadAt ? new Date(b.lastReadAt).getTime() : 0;
-        return dB - dA;
-      })
-      .slice(0, 4);
-  }
+	get recentManga(): Manga[] {
+		return [...this.library]
+			.filter((m) => m.lastReadAt || m.lastReadPage > 1)
+			.sort((a, b) => {
+				const dA = a.lastReadAt ? new Date(a.lastReadAt).getTime() : 0;
+				const dB = b.lastReadAt ? new Date(b.lastReadAt).getTime() : 0;
+				return dB - dA;
+			})
+			.slice(0, 4);
+	}
 }
 
 export const mangaStore = new MangaStore();
