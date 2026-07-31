@@ -1,0 +1,3 @@
+# Mantem LF no checkout em qualquer sistema: com CRLF o `npm run lint`
+# (prettier --check) falha no Windows depois de um clone limpo.
+* text=auto eol=lf
