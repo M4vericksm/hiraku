@@ -1,15 +1,12 @@
 <script lang="ts">
 	import { mangaStore } from '$lib/stores/manga.svelte';
-	import { type Series } from '$lib/stores/manga.svelte';
-	import { Plus, Search, Filter, BookOpen, Trash2, ChevronDown } from 'lucide-svelte';
-	import BulkImportModal from '$lib/components/BulkImportModal.svelte';
-	import { base } from '$app/paths';
+	import { Search, Filter, BookOpen, Trash2, ChevronDown, Compass } from 'lucide-svelte';
+	import { resolve } from '$app/paths';
 
 	type SortKey = 'addedAt' | 'title' | 'progress' | 'lastReadAt';
 	type FilterKey = 'all' | 'reading' | 'completed' | 'unread';
 
 	let searchQuery = $state('');
-	let isImportModalOpen = $state(false);
 	let deletingId = $state<string | null>(null);
 	let sortBy = $state<SortKey>('addedAt');
 	let filterBy = $state<FilterKey>('all');
@@ -19,14 +16,14 @@
 		addedAt: 'Adicionado',
 		title: 'Título',
 		progress: 'Progresso',
-		lastReadAt: 'Última leitura',
+		lastReadAt: 'Última leitura'
 	};
 
 	const FILTER_LABELS: Record<FilterKey, string> = {
 		all: 'Todos',
 		reading: 'Em andamento',
 		completed: 'Concluídos',
-		unread: 'Não iniciados',
+		unread: 'Não iniciados'
 	};
 
 	const filteredLibrary = $derived(() => {
@@ -42,8 +39,10 @@
 			if (sortBy === 'title') return a.title.localeCompare(b.title);
 			if (sortBy === 'progress') return b.progress - a.progress;
 			if (sortBy === 'lastReadAt') {
-				return (b.lastReadAt ? new Date(b.lastReadAt).getTime() : 0)
-					- (a.lastReadAt ? new Date(a.lastReadAt).getTime() : 0);
+				return (
+					(b.lastReadAt ? new Date(b.lastReadAt).getTime() : 0) -
+					(a.lastReadAt ? new Date(a.lastReadAt).getTime() : 0)
+				);
 			}
 			return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
 		});
@@ -51,93 +50,103 @@
 		return list;
 	});
 
-	// IDs that belong to a series
-	const seriesVolumeIds = $derived(
-		new Set(mangaStore.library.filter(m => m.seriesId).map(m => m.id))
-	);
-
-	// Standalone manga (not part of a series)
-	const standaloneManga = $derived(
-		filteredLibrary().filter(m => !m.seriesId)
-	);
-
-	// All series, filtered by search if applicable
-	const filteredSeries = $derived(
-		mangaStore.seriesList.filter(s =>
-			s.title.toLowerCase().includes(searchQuery.toLowerCase())
-		)
-	);
-
-	function handleImport() {
-		isImportModalOpen = true;
+	// Retoma no ultimo capitulo lido; sem historico, cai na pagina do manga.
+	function resumeHref(manga: { id: string; source: string; lastChapterId?: string }) {
+		return manga.lastChapterId
+			? resolve(`/reader/${manga.source}/${manga.id}/${manga.lastChapterId}`)
+			: resolve(`/manga/${manga.source}/${manga.id}`);
 	}
 
-	function requestDelete(id: string, e: MouseEvent) {
+	function requestDelete(source: string, id: string, e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
 		if (deletingId === id) {
-			mangaStore.removeManga(id);
+			mangaStore.removeManga(id, source);
 			deletingId = null;
 		} else {
 			deletingId = id;
-			setTimeout(() => { if (deletingId === id) deletingId = null; }, 3000);
+			setTimeout(() => {
+				if (deletingId === id) deletingId = null;
+			}, 3000);
 		}
 	}
 </script>
 
-<BulkImportModal isOpen={isImportModalOpen} onClose={() => (isImportModalOpen = false)} />
-
-<main class="max-w-7xl mx-auto px-6 py-12 pb-24 text-[var(--text-primary)] font-body">
-	<header class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+<main class="font-body mx-auto max-w-7xl px-6 py-12 pb-24 text-[var(--text-primary)]">
+	<header class="mb-12 flex flex-col justify-between gap-6 md:flex-row md:items-center">
 		<div>
-			<h1 class="text-4xl md:text-5xl mb-2 text-[var(--accent)] font-display font-bold">Hiraku</h1>
-			<p class="text-[var(--text-secondary)] text-lg">Sua biblioteca pessoal de mangás.</p>
+			<h1 class="font-display mb-2 text-4xl font-bold text-[var(--accent)] md:text-5xl">Hiraku</h1>
+			<p class="text-lg text-[var(--text-secondary)]">Sua biblioteca pessoal de mangás.</p>
 		</div>
 
 		<div class="flex items-center gap-3">
-			<div class="relative group">
-				<Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] group-focus-within:text-[var(--accent)] transition-colors" />
+			<div class="group relative">
+				<Search
+					class="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)] transition-colors group-focus-within:text-[var(--accent)]"
+				/>
 				<input
 					type="text"
 					bind:value={searchQuery}
 					placeholder="Buscar na biblioteca..."
-					class="bg-[var(--bg-secondary)] border border-[var(--border)] rounded-[var(--radius)] pl-10 pr-4 py-2 w-full md:w-64 focus:outline-none focus:border-[var(--accent)] transition-all"
+					class="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-secondary)] py-2 pr-4 pl-10 transition-all focus:border-[var(--accent)] focus:outline-none md:w-64"
 				/>
 			</div>
 			<div class="relative">
 				<button
 					onclick={() => (filterMenuOpen = !filterMenuOpen)}
-					class="p-2 border border-[var(--border)] rounded-[var(--radius)] hover:bg-[var(--bg-secondary)] transition-colors flex items-center gap-1.5 px-3"
+					class="flex items-center gap-1.5 rounded-[var(--radius)] border border-[var(--border)] p-2 px-3 transition-colors hover:bg-[var(--bg-secondary)]"
 				>
-					<Filter class="w-4 h-4" />
-					<span class="text-xs font-bold hidden sm:block">{filterBy !== 'all' || sortBy !== 'addedAt' ? '·' : ''}</span>
-					<ChevronDown class="w-3 h-3 opacity-50" />
+					<Filter class="h-4 w-4" />
+					<span class="hidden text-xs font-bold sm:block"
+						>{filterBy !== 'all' || sortBy !== 'addedAt' ? '·' : ''}</span
+					>
+					<ChevronDown class="h-3 w-3 opacity-50" />
 				</button>
 				{#if filterMenuOpen}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div
-						class="absolute right-0 top-full mt-2 w-56 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl shadow-2xl z-50 p-3 flex flex-col gap-1"
+						class="absolute top-full right-0 z-50 mt-2 flex w-56 flex-col gap-1 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-3 shadow-2xl"
 						onmouseleave={() => (filterMenuOpen = false)}
 					>
-						<p class="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] px-2 mb-1">Ordenar</p>
-						{#each Object.entries(SORT_LABELS) as [key, label]}
+						<p
+							class="mb-1 px-2 text-[9px] font-black tracking-widest text-[var(--text-muted)] uppercase"
+						>
+							Ordenar
+						</p>
+						{#each Object.entries(SORT_LABELS) as [key, label] (key)}
 							<button
-								onclick={() => { sortBy = key as SortKey; }}
-								class="text-left px-3 py-2 rounded-lg text-sm hover:bg-[var(--bg-accent)]/10 transition-colors flex items-center justify-between {sortBy === key ? 'text-[var(--accent)] font-bold' : ''}"
+								onclick={() => {
+									sortBy = key as SortKey;
+								}}
+								class="flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--bg-accent)]/10 {sortBy ===
+								key
+									? 'font-bold text-[var(--accent)]'
+									: ''}"
 							>
 								{label}
-								{#if sortBy === key}<span class="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>{/if}
+								{#if sortBy === key}<span class="h-1.5 w-1.5 rounded-full bg-[var(--accent)]"
+									></span>{/if}
 							</button>
 						{/each}
-						<div class="border-t border-[var(--border)] my-1"></div>
-						<p class="text-[9px] font-black uppercase tracking-widest text-[var(--text-muted)] px-2 mb-1">Filtrar</p>
-						{#each Object.entries(FILTER_LABELS) as [key, label]}
+						<div class="my-1 border-t border-[var(--border)]"></div>
+						<p
+							class="mb-1 px-2 text-[9px] font-black tracking-widest text-[var(--text-muted)] uppercase"
+						>
+							Filtrar
+						</p>
+						{#each Object.entries(FILTER_LABELS) as [key, label] (key)}
 							<button
-								onclick={() => { filterBy = key as FilterKey; }}
-								class="text-left px-3 py-2 rounded-lg text-sm hover:bg-[var(--bg-accent)]/10 transition-colors flex items-center justify-between {filterBy === key ? 'text-[var(--accent)] font-bold' : ''}"
+								onclick={() => {
+									filterBy = key as FilterKey;
+								}}
+								class="flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--bg-accent)]/10 {filterBy ===
+								key
+									? 'font-bold text-[var(--accent)]'
+									: ''}"
 							>
 								{label}
-								{#if filterBy === key}<span class="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>{/if}
+								{#if filterBy === key}<span class="h-1.5 w-1.5 rounded-full bg-[var(--accent)]"
+									></span>{/if}
 							</button>
 						{/each}
 					</div>
@@ -148,137 +157,125 @@
 
 	{#if mangaStore.isLoading}
 		<div class="flex items-center justify-center py-24">
-			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--accent)]"></div>
+			<div class="h-12 w-12 animate-spin rounded-full border-b-2 border-[var(--accent)]"></div>
 		</div>
 	{:else if mangaStore.library.length === 0}
-		<div class="flex flex-col items-center justify-center py-24 px-6 text-center border-2 border-dashed border-[var(--border)] rounded-2xl">
-			<div class="w-20 h-20 bg-[var(--bg-secondary)] rounded-full flex items-center justify-center mb-6">
-				<BookOpen class="w-10 h-10 text-[var(--text-muted)]" />
+		<div
+			class="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--border)] px-6 py-24 text-center"
+		>
+			<div
+				class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--bg-secondary)]"
+			>
+				<BookOpen class="h-10 w-10 text-[var(--text-muted)]" />
 			</div>
-			<h2 class="text-2xl mb-2">Sua biblioteca está vazia</h2>
-			<p class="text-[var(--text-secondary)] max-w-md mb-8">
-				Importe seus arquivos PDF para começar a ler com a melhor experiência.
+			<h2 class="mb-2 text-2xl">Sua biblioteca está vazia</h2>
+			<p class="mb-8 max-w-md text-[var(--text-secondary)]">
+				Explore o catálogo e adicione mangás à sua biblioteca.
 			</p>
-			<button onclick={handleImport} class="btn-primary flex items-center gap-2">
-				<Plus class="w-5 h-5" />
-				Importar Primeiro Mangá
-			</button>
+			<a href={resolve('/catalog')} class="btn-primary flex items-center gap-2">
+				<Compass class="h-5 w-5" />
+				Explorar Catálogo
+			</a>
 		</div>
 	{:else}
 		{#if mangaStore.recentManga.length > 0}
 			<section class="mb-16">
-				<h3 class="text-xl mb-6 opacity-60 uppercase tracking-widest text-sm">Continuar Lendo</h3>
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-					{#each mangaStore.recentManga.slice(0, 2) as manga}
-						<a href="{base}/manga/{manga.id}" class="card flex h-48 group cursor-pointer hover:border-[var(--accent)] transition-colors">
-							<div class="w-32 bg-[var(--bg-accent)] flex-shrink-0 relative">
+				<h3 class="mb-6 text-sm text-xl tracking-widest uppercase opacity-60">Continuar Lendo</h3>
+				<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+					{#each mangaStore.recentManga.slice(0, 2) as manga (manga.id + manga.source)}
+						<!-- eslint-disable svelte/no-navigation-without-resolve -- resumeHref() ja aplica resolve() -->
+						<a
+							href={resumeHref(manga)}
+							class="card group flex h-48 cursor-pointer transition-colors hover:border-[var(--accent)]"
+						>
+							<div class="relative w-32 flex-shrink-0 bg-[var(--bg-accent)]">
 								{#if manga.coverUrl}
-									<img src={manga.coverUrl} alt={manga.title} class="w-full h-full object-cover" />
+									<img src={manga.coverUrl} alt="Capa" class="h-full w-full object-cover" />
+								{:else}
+									<div class="flex h-full w-full items-center justify-center">
+										<BookOpen class="h-8 w-8 text-[var(--text-muted)]" />
+									</div>
 								{/if}
-								<div class="absolute bottom-0 left-0 w-full h-1.5 bg-black/20">
-									<div class="h-full bg-[var(--accent)]" style="width: {manga.progress}%"></div>
-								</div>
 							</div>
-							<div class="p-6 flex flex-col justify-between flex-grow">
-								<div>
-									<h4 class="text-xl mb-1 line-clamp-1">{manga.title}</h4>
-									<p class="text-[var(--text-secondary)] text-sm line-clamp-1">{manga.author || 'Autor desconhecido'}</p>
-								</div>
-								<div class="flex items-center justify-between mt-4">
-									<span class="text-[var(--text-muted)] text-sm">Pág. {manga.lastReadPage} / {manga.totalPage}</span>
-									<div class="text-[var(--accent)] group-hover:translate-x-1 transition-transform">
-										<BookOpen class="w-6 h-6" />
+							<div class="flex flex-1 flex-col p-5">
+								<h4
+									class="mb-1 line-clamp-2 text-lg font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)]"
+								>
+									{manga.title}
+								</h4>
+								<p class="text-sm text-[var(--text-secondary)]">
+									{manga.lastChapterLabel || manga.author || 'Continuar leitura'}
+								</p>
+								<div class="mt-4 flex items-center justify-between">
+									<span class="text-sm text-[var(--text-muted)]">
+										{manga.totalPage > 0
+											? `Pág. ${manga.lastReadPage} / ${manga.totalPage}`
+											: 'Começar'}
+									</span>
+									<div class="text-[var(--accent)] transition-transform group-hover:translate-x-1">
+										<BookOpen class="h-6 w-6" />
 									</div>
 								</div>
 							</div>
 						</a>
+						<!-- eslint-enable svelte/no-navigation-without-resolve -->
 					{/each}
 				</div>
 			</section>
 		{/if}
 
 		<section>
-			<h3 class="text-xl mb-6 opacity-60 uppercase tracking-widest text-sm">Minha Biblioteca</h3>
-			<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-				<!-- Series cards -->
-				{#each filteredSeries as series}
-					<div class="group cursor-pointer relative">
-						<a href="{base}/series/{series.id}">
-							<div class="aspect-[3/4] mb-3 relative group-hover:-translate-y-2 transition-transform duration-300">
-								<!-- Stacked covers effect -->
-								{#each series.volumes.slice(0, 3).reverse() as vol, i}
-									<div
-										class="absolute inset-0 rounded-[var(--radius)] overflow-hidden border border-[var(--border)]"
-										style="transform: rotate({(i-1)*2}deg) scale({1 - i*0.03}); z-index: {i};"
-									>
-										{#if vol.coverUrl}
-											<img src={vol.coverUrl} alt={vol.title} class="w-full h-full object-cover" />
-										{/if}
-									</div>
-								{/each}
-								<!-- Volume count badge -->
-								<div class="absolute top-1.5 right-1.5 z-10 bg-[var(--accent)] text-[var(--accent-foreground)] text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-widest">
-									{series.volumes.length} vol.
-								</div>
-								<!-- Hover overlay -->
-								<div class="absolute inset-0 z-10 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-[var(--radius)] flex items-end justify-center pb-4">
-									<span class="text-white text-[10px] font-black uppercase tracking-widest bg-[var(--accent)] px-3 py-1.5 rounded-md flex items-center gap-1.5">
-										<BookOpen class="w-3 h-3" /> VER SÉRIE
-									</span>
-								</div>
-							</div>
-							<h4 class="text-sm font-medium line-clamp-2 leading-snug group-hover:text-[var(--accent)] transition-colors font-body">{series.title}</h4>
-							<p class="text-[10px] text-[var(--text-muted)] mt-0.5">{series.volumes.length} volume{series.volumes.length !== 1 ? 's' : ''}</p>
-						</a>
-					</div>
-				{/each}
-
-				<!-- Standalone manga cards -->
-				{#each standaloneManga as manga}
-					<div class="group cursor-pointer relative">
-						<a href="{base}/manga/{manga.id}">
-							<div class="aspect-[3/4] card mb-3 relative group-hover:-translate-y-2 transition-transform duration-300">
+			<h3 class="mb-6 text-sm text-xl tracking-widest uppercase opacity-60">Minha Biblioteca</h3>
+			<div class="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+				{#each filteredLibrary() as manga (manga.id + manga.source)}
+					<div class="group relative cursor-pointer">
+						<a href={resolve(`/manga/${manga.source}/${manga.id}`)}>
+							<div
+								class="card relative mb-3 aspect-[3/4] transition-transform duration-300 group-hover:-translate-y-2"
+							>
 								{#if manga.coverUrl}
-									<img src={manga.coverUrl} alt={manga.title} class="w-full h-full object-cover" />
+									<img src={manga.coverUrl} alt="Capa" class="h-full w-full object-cover" />
+								{:else}
+									<div class="flex h-full w-full items-center justify-center">
+										<BookOpen class="h-8 w-8 text-[var(--text-muted)]" />
+									</div>
 								{/if}
-								<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-4">
-									<span class="text-white text-[10px] font-black uppercase tracking-widest bg-[var(--accent)] px-3 py-1.5 rounded-md flex items-center gap-1.5">
-										<BookOpen class="w-3 h-3" /> LER
+								<div
+									class="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/60 via-transparent to-transparent pb-4 opacity-0 transition-opacity group-hover:opacity-100"
+								>
+									<span
+										class="flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 py-1.5 text-[10px] font-black tracking-widest text-white uppercase"
+									>
+										<BookOpen class="h-3 w-3" /> LER
 									</span>
 								</div>
 								{#if manga.progress > 0}
-									<div class="absolute bottom-0 left-0 w-full h-1.5 bg-black/40">
+									<div class="absolute bottom-0 left-0 h-1.5 w-full bg-black/40">
 										<div class="h-full bg-[var(--accent)]" style="width: {manga.progress}%"></div>
 									</div>
 								{/if}
 							</div>
-							<h4 class="text-sm font-medium line-clamp-2 leading-snug group-hover:text-[var(--accent)] transition-colors font-body">{manga.title}</h4>
+							<h4
+								class="font-body line-clamp-2 text-sm leading-snug font-medium transition-colors group-hover:text-[var(--accent)]"
+							>
+								{manga.title}
+							</h4>
 						</a>
 						<button
-							onclick={(e) => requestDelete(manga.id, e)}
+							onclick={(e) => requestDelete(manga.source, manga.id, e)}
 							title={deletingId === manga.id ? 'Confirmar exclusão' : 'Remover da biblioteca'}
 							class={[
-								'absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center transition-all z-10',
+								'absolute top-1 right-1 z-10 flex h-7 w-7 items-center justify-center rounded-full transition-all',
 								deletingId === manga.id
-									? 'bg-red-500 text-white opacity-100 scale-110'
+									? 'scale-110 bg-red-500 text-white opacity-100'
 									: 'bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500'
 							].join(' ')}
 						>
-							<Trash2 class="w-3.5 h-3.5" />
+							<Trash2 class="h-3.5 w-3.5" />
 						</button>
 					</div>
 				{/each}
-
-				<!-- Import button -->
-				<button onclick={handleImport} class="aspect-[3/4] border-2 border-dashed border-[var(--border)] rounded-[var(--radius)] flex flex-col items-center justify-center gap-2 text-[var(--text-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all group">
-					<Plus class="w-8 h-8 group-hover:scale-110 transition-transform" />
-					<span class="text-xs font-bold uppercase tracking-tighter">Importar PDF</span>
-				</button>
 			</div>
 		</section>
 	{/if}
-
-	<button onclick={handleImport} class="fixed bottom-8 right-8 w-16 h-16 bg-[var(--accent)] text-[var(--accent-foreground)] rounded-full shadow-2xl flex items-center justify-center md:hidden active:scale-90 transition-transform z-50">
-		<Plus class="w-8 h-8" />
-	</button>
 </main>

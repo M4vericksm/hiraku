@@ -1,26 +1,16 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-
-vi.mock('../services/persistence', () => ({
-	PersistenceService: {
-		saveHandle: vi.fn().mockResolvedValue(undefined),
-		getHandle: vi.fn().mockResolvedValue(null),
-		removeHandle: vi.fn().mockResolvedValue(undefined),
-	},
-}));
-
+import { describe, it, expect, beforeEach } from 'vitest';
 import { mangaStore, type Manga } from './manga.svelte';
 
 function makeManga(overrides: Partial<Manga> = {}): Manga {
 	return {
 		id: crypto.randomUUID(),
+		source: 'mangadex',
 		title: 'Test Manga',
 		progress: 0,
 		lastReadPage: 0,
 		totalPage: 100,
-		filePath: '/path/to/file.pdf',
 		addedAt: new Date().toISOString(),
-		bookmarks: [],
-		...overrides,
+		...overrides
 	};
 }
 
@@ -29,54 +19,54 @@ beforeEach(() => {
 });
 
 describe('MangaStore.addManga', () => {
-	it('adds a manga to the library', async () => {
+	it('adds a manga to the library', () => {
 		const manga = makeManga({ title: 'Berserk' });
-		await mangaStore.addManga(manga);
+		mangaStore.addManga(manga);
 		expect(mangaStore.library).toHaveLength(1);
 		expect(mangaStore.library[0].title).toBe('Berserk');
 	});
 
-	it('prepends new manga to the library', async () => {
+	it('prepends new manga to the library', () => {
 		const first = makeManga({ title: 'First' });
 		const second = makeManga({ title: 'Second' });
-		await mangaStore.addManga(first);
-		await mangaStore.addManga(second);
+		mangaStore.addManga(first);
+		mangaStore.addManga(second);
 		expect(mangaStore.library[0].title).toBe('Second');
 		expect(mangaStore.library[1].title).toBe('First');
 	});
 
-	it('persists library to localStorage', async () => {
+	it('persists library to localStorage', () => {
 		const manga = makeManga({ title: 'Naruto' });
-		await mangaStore.addManga(manga);
+		mangaStore.addManga(manga);
 		const stored = JSON.parse(localStorage.getItem('hiraku-library') ?? '[]') as Manga[];
 		expect(stored.some((m) => m.title === 'Naruto')).toBe(true);
 	});
 });
 
 describe('MangaStore.updateProgress', () => {
-	it('calculates progress percentage correctly', async () => {
-		const manga = makeManga({ id: 'abc', totalPage: 200 });
-		await mangaStore.addManga(manga);
-		mangaStore.updateProgress('abc', 50, 200);
-		const updated = mangaStore.library.find((m) => m.id === 'abc');
+	it('calculates progress percentage correctly', () => {
+		const manga = makeManga({ id: 'abc', source: 'src', totalPage: 200 });
+		mangaStore.addManga(manga);
+		mangaStore.updateProgress('abc', 'src', 50, 200);
+		const updated = mangaStore.library.find((m) => m.id === 'abc' && m.source === 'src');
 		expect(updated?.progress).toBe(25);
 		expect(updated?.lastReadPage).toBe(50);
 	});
 
-	it('sets progress to 100 on last page', async () => {
-		const manga = makeManga({ id: 'xyz', totalPage: 100 });
-		await mangaStore.addManga(manga);
-		mangaStore.updateProgress('xyz', 100, 100);
-		const updated = mangaStore.library.find((m) => m.id === 'xyz');
+	it('sets progress to 100 on last page', () => {
+		const manga = makeManga({ id: 'xyz', source: 'src', totalPage: 100 });
+		mangaStore.addManga(manga);
+		mangaStore.updateProgress('xyz', 'src', 100, 100);
+		const updated = mangaStore.library.find((m) => m.id === 'xyz' && m.source === 'src');
 		expect(updated?.progress).toBe(100);
 	});
 
-	it('sets lastReadAt timestamp', async () => {
-		const manga = makeManga({ id: 'ts' });
-		await mangaStore.addManga(manga);
+	it('sets lastReadAt timestamp', () => {
+		const manga = makeManga({ id: 'ts', source: 'src' });
+		mangaStore.addManga(manga);
 		const before = Date.now();
-		mangaStore.updateProgress('ts', 10, 100);
-		const updated = mangaStore.library.find((m) => m.id === 'ts');
+		mangaStore.updateProgress('ts', 'src', 10, 100);
+		const updated = mangaStore.library.find((m) => m.id === 'ts' && m.source === 'src');
 		const after = Date.now();
 		const lastRead = new Date(updated!.lastReadAt!).getTime();
 		expect(lastRead).toBeGreaterThanOrEqual(before);
@@ -84,137 +74,139 @@ describe('MangaStore.updateProgress', () => {
 	});
 
 	it('does nothing when id not found', () => {
-		expect(() => mangaStore.updateProgress('nonexistent', 5, 10)).not.toThrow();
+		expect(() => mangaStore.updateProgress('nonexistent', 'src', 5, 10)).not.toThrow();
+	});
+
+	it('does not add mangas that are not in the library', () => {
+		mangaStore.updateProgress('from-catalog', 'src', 5, 10);
+		expect(mangaStore.library).toHaveLength(0);
+	});
+
+	it('records the chapter being read so reading can resume there', () => {
+		mangaStore.addManga(makeManga({ id: 'ch', source: 'src' }));
+		mangaStore.updateProgress('ch', 'src', 3, 20, { id: 'chapter-7', label: 'Cap. 7' });
+		const updated = mangaStore.find('ch', 'src');
+		expect(updated?.lastChapterId).toBe('chapter-7');
+		expect(updated?.lastChapterLabel).toBe('Cap. 7');
+	});
+
+	it('keeps the known chapter when a later update omits it', () => {
+		mangaStore.addManga(makeManga({ id: 'keep', source: 'src' }));
+		mangaStore.updateProgress('keep', 'src', 1, 20, { id: 'chapter-1' });
+		mangaStore.updateProgress('keep', 'src', 2, 20);
+		expect(mangaStore.find('keep', 'src')?.lastChapterId).toBe('chapter-1');
+	});
+
+	it('does not divide by zero when the chapter has no pages', () => {
+		mangaStore.addManga(makeManga({ id: 'empty', source: 'src' }));
+		mangaStore.updateProgress('empty', 'src', 0, 0);
+		expect(mangaStore.find('empty', 'src')?.progress).toBe(0);
+	});
+});
+
+describe('MangaStore chapter read state', () => {
+	it('marks a chapter as read', () => {
+		mangaStore.addManga(makeManga({ id: 'r', source: 'src' }));
+		mangaStore.markChapterRead('r', 'src', 'c1');
+		expect(mangaStore.isChapterRead('r', 'src', 'c1')).toBe(true);
+	});
+
+	it('does not duplicate a chapter marked twice', () => {
+		mangaStore.addManga(makeManga({ id: 'dup', source: 'src' }));
+		mangaStore.markChapterRead('dup', 'src', 'c1');
+		mangaStore.markChapterRead('dup', 'src', 'c1');
+		expect(mangaStore.find('dup', 'src')?.readChapterIds).toEqual(['c1']);
+	});
+
+	it('reports unread chapters as not read', () => {
+		mangaStore.addManga(makeManga({ id: 'u', source: 'src' }));
+		expect(mangaStore.isChapterRead('u', 'src', 'c9')).toBe(false);
+	});
+
+	it('is safe for mangas outside the library', () => {
+		expect(() => mangaStore.markChapterRead('ghost', 'src', 'c1')).not.toThrow();
+		expect(mangaStore.isChapterRead('ghost', 'src', 'c1')).toBe(false);
 	});
 });
 
 describe('MangaStore.removeManga', () => {
-	it('removes manga by id', async () => {
-		const manga = makeManga({ id: 'del' });
-		await mangaStore.addManga(manga);
+	it('removes manga by id and source', () => {
+		const manga = makeManga({ id: 'del', source: 'src' });
+		mangaStore.addManga(manga);
 		expect(mangaStore.library).toHaveLength(1);
-		await mangaStore.removeManga('del');
+		mangaStore.removeManga('del', 'src');
 		expect(mangaStore.library).toHaveLength(0);
 	});
 
-	it('does not affect other entries', async () => {
-		const a = makeManga({ id: 'a', title: 'A' });
-		const b = makeManga({ id: 'b', title: 'B' });
-		await mangaStore.addManga(a);
-		await mangaStore.addManga(b);
-		await mangaStore.removeManga('a');
+	it('does not affect other entries', () => {
+		const a = makeManga({ id: 'a', source: 'src1', title: 'A' });
+		const b = makeManga({ id: 'b', source: 'src2', title: 'B' });
+		mangaStore.addManga(a);
+		mangaStore.addManga(b);
+		mangaStore.removeManga('a', 'src1');
 		expect(mangaStore.library).toHaveLength(1);
 		expect(mangaStore.library[0].title).toBe('B');
 	});
 });
 
 describe('MangaStore.recentManga', () => {
-	it('returns only mangas with activity', async () => {
-		const unread = makeManga({ id: 'u', lastReadPage: 0 });
-		const read = makeManga({ id: 'r', lastReadPage: 5, lastReadAt: new Date().toISOString() });
-		await mangaStore.addManga(unread);
-		await mangaStore.addManga(read);
+	it('returns only mangas with activity', () => {
+		const unread = makeManga({ id: 'u', source: 's', lastReadPage: 0 });
+		const read = makeManga({
+			id: 'r',
+			source: 's',
+			lastReadPage: 5,
+			lastReadAt: new Date().toISOString()
+		});
+		mangaStore.addManga(unread);
+		mangaStore.addManga(read);
 		expect(mangaStore.recentManga.every((m) => m.id !== 'u')).toBe(true);
 		expect(mangaStore.recentManga.some((m) => m.id === 'r')).toBe(true);
 	});
 
-	it('returns at most 4 items', async () => {
+	it('returns at most 4 items', () => {
 		for (let i = 0; i < 6; i++) {
-			await mangaStore.addManga(
-				makeManga({ lastReadPage: 10, lastReadAt: new Date(Date.now() - i * 1000).toISOString() })
+			mangaStore.addManga(
+				makeManga({
+					id: `m${i}`,
+					source: 's',
+					lastReadPage: 10,
+					lastReadAt: new Date(Date.now() - i * 1000).toISOString()
+				})
 			);
 		}
 		expect(mangaStore.recentManga.length).toBeLessThanOrEqual(4);
 	});
 
-	it('is sorted by lastReadAt descending', async () => {
+	it('is sorted by lastReadAt descending', () => {
 		const older = makeManga({
 			id: 'old',
+			source: 's',
 			lastReadPage: 1,
-			lastReadAt: new Date('2026-01-01').toISOString(),
+			lastReadAt: new Date('2026-01-01').toISOString()
 		});
 		const newer = makeManga({
 			id: 'new',
+			source: 's',
 			lastReadPage: 1,
-			lastReadAt: new Date('2026-03-01').toISOString(),
+			lastReadAt: new Date('2026-03-01').toISOString()
 		});
-		await mangaStore.addManga(older);
-		await mangaStore.addManga(newer);
+		mangaStore.addManga(older);
+		mangaStore.addManga(newer);
 		expect(mangaStore.recentManga[0].id).toBe('new');
 	});
 });
 
 describe('MangaStore.clearAll', () => {
-	it('empties the library', async () => {
-		await mangaStore.addManga(makeManga());
+	it('empties the library', () => {
+		mangaStore.addManga(makeManga());
 		mangaStore.clearAll();
 		expect(mangaStore.library).toHaveLength(0);
 	});
 
-	it('removes localStorage entry', async () => {
-		await mangaStore.addManga(makeManga());
+	it('removes localStorage entry', () => {
+		mangaStore.addManga(makeManga());
 		mangaStore.clearAll();
 		expect(localStorage.getItem('hiraku-library')).toBeNull();
-	});
-});
-
-describe('MangaStore.exportLibrary', () => {
-	it('returns a valid JSON string', async () => {
-		await mangaStore.addManga(makeManga({ title: 'Export Test' }));
-		const json = mangaStore.exportLibrary();
-		expect(() => JSON.parse(json)).not.toThrow();
-	});
-
-	it('includes version and exportedAt fields', async () => {
-		const json = mangaStore.exportLibrary();
-		const parsed = JSON.parse(json);
-		expect(parsed.version).toBe('1');
-		expect(parsed.exportedAt).toBeTruthy();
-	});
-
-	it('includes all library entries', async () => {
-		await mangaStore.addManga(makeManga({ id: 'e1', title: 'A' }));
-		await mangaStore.addManga(makeManga({ id: 'e2', title: 'B' }));
-		const parsed = JSON.parse(mangaStore.exportLibrary());
-		expect(parsed.library).toHaveLength(2);
-	});
-});
-
-describe('MangaStore.importLibrary', () => {
-	it('imports new entries from valid backup', async () => {
-		const manga = makeManga({ id: 'imp1', title: 'Imported' });
-		const backup = JSON.stringify({ version: '1', exportedAt: new Date().toISOString(), library: [manga] });
-		const result = mangaStore.importLibrary(backup);
-		expect(result.ok).toBe(true);
-		expect(result.count).toBe(1);
-		expect(mangaStore.library.some((m) => m.id === 'imp1')).toBe(true);
-	});
-
-	it('skips entries with duplicate ids', async () => {
-		const manga = makeManga({ id: 'dup' });
-		await mangaStore.addManga(manga);
-		const backup = JSON.stringify({ version: '1', exportedAt: new Date().toISOString(), library: [manga] });
-		const result = mangaStore.importLibrary(backup);
-		expect(result.count).toBe(0);
-		expect(mangaStore.library.filter((m) => m.id === 'dup')).toHaveLength(1);
-	});
-
-	it('marks imported entries as hasHandle: false', async () => {
-		const manga = makeManga({ id: 'nohandle', hasHandle: true });
-		const backup = JSON.stringify({ version: '1', exportedAt: new Date().toISOString(), library: [manga] });
-		mangaStore.importLibrary(backup);
-		const imported = mangaStore.library.find((m) => m.id === 'nohandle');
-		expect(imported?.hasHandle).toBe(false);
-	});
-
-	it('returns error on invalid JSON', () => {
-		const result = mangaStore.importLibrary('not json');
-		expect(result.ok).toBe(false);
-		expect(result.error).toBeTruthy();
-	});
-
-	it('returns error if library field is missing', () => {
-		const result = mangaStore.importLibrary(JSON.stringify({ version: '1' }));
-		expect(result.ok).toBe(false);
 	});
 });
