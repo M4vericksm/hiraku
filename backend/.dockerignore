@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+tests/
+hiraku.db
+docker-compose*.yml
+Dockerfile
+.dockerignore
+README.md

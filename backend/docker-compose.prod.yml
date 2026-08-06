@@ -1,0 +1,23 @@
+services:
+  api:
+    build: .
+    container_name: hiraku-api
+    restart: unless-stopped
+    # So o cloudflared (no host) alcanca a API. Nao fica exposta na LAN.
+    ports:
+      - '127.0.0.1:8000:8000'
+    environment:
+      # Origins do WebView do Capacitor (Android usa localhost como origin).
+      HIRAKU_CORS_ORIGINS: 'https://localhost,http://localhost,capacitor://localhost,ionic://localhost'
+      HIRAKU_DATABASE_URL: 'sqlite:////app/data/hiraku.db'
+    volumes:
+      - hiraku-data:/app/data
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  hiraku-data:
