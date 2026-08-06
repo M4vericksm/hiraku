@@ -1,3 +1,5 @@
+import asyncio
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
@@ -8,6 +10,8 @@ from app.services.images import needs_proxy, proxy_url
 from app.sources.registry import SourceRegistry, default_registry
 
 T = TypeVar("T")
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryTtlCache:
@@ -45,11 +49,22 @@ class CatalogService:
         self, query: str, source_id: str | None = None, limit: int = 10
     ) -> list[MangaSearchResult]:
         adapters = [self.registry.get(source_id)] if source_id else self.registry.all()
-        results: list[MangaSearchResult] = []
-        for adapter in adapters:
+
+        async def _one(adapter) -> list[MangaSearchResult]:
             key = f"search:{adapter.info.id}:{query.strip().lower()}:{limit}"
-            found = await self.cache.get_or_set(key, lambda a=adapter: a.search(query, limit))
-            results.extend(found)
+            try:
+                return await self.cache.get_or_set(
+                    key, lambda a=adapter: a.search(query, limit)
+                )
+            except Exception:
+                # Uma fonte morta nao pode apagar o resultado das outras.
+                # Em busca de fonte unica o caller ainda recebe lista vazia e
+                # decide o status HTTP; em multi-fonte devolvemos o que sobrou.
+                logger.exception("Busca falhou em %s", adapter.info.id)
+                return []
+
+        batches = await asyncio.gather(*[_one(adapter) for adapter in adapters])
+        results = [item for batch in batches for item in batch]
         ranked = sorted(results, key=lambda result: result.score, reverse=True)[:limit]
         return [self._with_proxied_cover(result) for result in ranked]
 

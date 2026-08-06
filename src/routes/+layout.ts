@@ -1,2 +1,2 @@
-/** Biblioteca e estado vivem só no browser (localStorage / IndexedDB). SSR gerava HTML com spinner e hidratação falhava. */
-export const ssr = false;
+ export const ssr = false;
+  export const prerender = false;

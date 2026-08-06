@@ -19,6 +19,10 @@ class MangaSearchResult(BaseModel):
     # quando a fonte nao envia cabecalho CORS.
     cover_url: str | None = None
     language: str | None = None
+    # Generos normalizados (ver `sources/genres.py`). Vazio quando a fonte nao
+    # expoe generos naquele endpoint — a busca do MangaLivre, por exemplo, so
+    # devolve titulo e capa.
+    genres: list[str] = Field(default_factory=list)
     score: float = Field(default=0, ge=0, le=1)
 
 

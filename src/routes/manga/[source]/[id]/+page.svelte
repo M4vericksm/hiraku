@@ -89,7 +89,8 @@
 	}
 
 	// Download state management
-	let downloadedMap = $state<Record<string, 'downloaded' | 'downloading' | 'not_downloaded'>>({});
+	type DownloadState = 'downloaded' | 'downloading' | 'partial' | 'not_downloaded';
+	let downloadedMap = $state<Record<string, DownloadState>>({});
 	let downloadProgress = $state<Record<string, number>>({});
 	let downloadError = $state<string | null>(null);
 
@@ -98,13 +99,20 @@
 		const currentSource = source;
 		const mangaId = id;
 		for (const chapter of chapters) {
-			offlineService
-				.isChapterDownloaded(currentSource, mangaId, chapter.source_id)
-				.then((isDownloaded) => {
-					// Não sobrescreve um download em andamento.
-					if (downloadedMap[chapter.source_id] === 'downloading') return;
-					downloadedMap[chapter.source_id] = isDownloaded ? 'downloaded' : 'not_downloaded';
-				});
+			offlineService.getChapterStatus(currentSource, mangaId, chapter.source_id).then((meta) => {
+				// Não sobrescreve um download em andamento.
+				if (downloadedMap[chapter.source_id] === 'downloading') return;
+				downloadedMap[chapter.source_id] = !meta
+					? 'not_downloaded'
+					: meta.status === 'partial'
+						? 'partial'
+						: 'downloaded';
+				if (meta?.status === 'partial' && meta.totalPages > 0) {
+					downloadProgress[chapter.source_id] = Math.round(
+						(meta.pageCount / meta.totalPages) * 100
+					);
+				}
+			});
 		}
 	});
 
