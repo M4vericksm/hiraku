@@ -4,19 +4,24 @@
 	import { page } from '$app/state';
 	import { base, resolve } from '$app/paths';
 	import { cn } from '$lib/utils';
+	import { preferences } from '$lib/stores/preferences.svelte';
+	import { initBackButton, destroyBackButton } from '$lib/services/backButton';
 	import { Settings, Library, BookOpen, Compass } from 'lucide-svelte';
 
 	let { children } = $props();
-	let currentTheme = $state('theme-ink');
+
+	// O tema vem do store; trocar aplica na hora, sem recarregar a pagina.
+	const currentTheme = $derived(preferences.theme);
 
 	onMount(() => {
-		const savedTheme = localStorage.getItem('hiraku-theme');
-		if (savedTheme) currentTheme = savedTheme;
+		void initBackButton();
 
 		if ('serviceWorker' in navigator) {
 			const swUrl = `${base}/sw.js`;
 			void navigator.serviceWorker.register(swUrl);
 		}
+
+		return () => void destroyBackButton();
 	});
 
 	const isReader = $derived(page.route.id?.startsWith('/reader'));

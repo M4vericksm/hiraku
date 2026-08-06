@@ -6,7 +6,7 @@ download offline le os bytes da pagina. O proxy resolve isso servindo a imagem
 a partir do nosso proprio dominio, com o Referer que a fonte espera.
 """
 
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import httpx
 
@@ -32,6 +32,10 @@ BROWSER_USER_AGENT = (
 )
 
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
+
+# Redirect e comum nas CDNs das fontes, mas cada salto precisa cair de novo em
+# `is_allowed`. Um teto baixo evita cadeia infinita.
+MAX_REDIRECTS = 5
 
 # Hosts que respondem com Access-Control-Allow-Origin. Imagens desses hosts
 # podem ir direto para o navegador; as demais precisam passar pelo proxy para
@@ -93,18 +97,57 @@ def upstream_headers(url: str) -> dict[str, str]:
     return headers
 
 
-async def fetch_image(url: str, client: httpx.AsyncClient) -> tuple[bytes, str]:
-    """Baixa uma imagem da fonte e devolve (bytes, content_type)."""
-    if not is_allowed(url):
-        raise ImageProxyError(f"Host nao permitido: {url}")
+async def fetch_image(
+    url: str,
+    client: httpx.AsyncClient,
+    timeout: httpx.Timeout | None = None,
+) -> tuple[bytes, str]:
+    """Baixa uma imagem da fonte e devolve (bytes, content_type).
 
-    response = await client.get(url, headers=upstream_headers(url))
-    response.raise_for_status()
+    Segue redirects manualmente porque `follow_redirects=True` validaria
+    apenas a URL inicial: um 302 de um host permitido para `169.254.169.254`
+    transformaria o proxy num leitor de metadados da VM.
 
-    content_type = response.headers.get("content-type", "image/jpeg")
-    if not content_type.startswith("image/"):
-        raise ImageProxyError(f"Resposta nao e uma imagem: {content_type}")
-    if len(response.content) > MAX_IMAGE_BYTES:
-        raise ImageProxyError("Imagem excede o tamanho maximo permitido")
+    O corpo e lido em pedacos e cortado em `MAX_IMAGE_BYTES` antes de caber na
+    memoria — bufferizar primeiro para medir depois derruba o processo.
+    """
+    current = url
+    for _ in range(MAX_REDIRECTS + 1):
+        if not is_allowed(current):
+            raise ImageProxyError(f"Host nao permitido: {current}")
 
-    return response.content, content_type
+        build_kwargs = {} if timeout is None else {"timeout": timeout}
+        request = client.build_request(
+            "GET", current, headers=upstream_headers(current), **build_kwargs
+        )
+        response = await client.send(request, stream=True)
+        try:
+            if response.is_redirect:
+                location = response.headers.get("location")
+                if not location:
+                    raise ImageProxyError("Redirect sem destino")
+                # urljoin resolve Location relativo contra a URL corrente.
+                current = urljoin(current, location)
+                continue
+
+            response.raise_for_status()
+
+            content_type = response.headers.get("content-type", "image/jpeg")
+            if not content_type.startswith("image/"):
+                raise ImageProxyError(f"Resposta nao e uma imagem: {content_type}")
+
+            declared = response.headers.get("content-length")
+            if declared and declared.isdigit() and int(declared) > MAX_IMAGE_BYTES:
+                raise ImageProxyError("Imagem excede o tamanho maximo permitido")
+
+            buffer = bytearray()
+            async for chunk in response.aiter_bytes():
+                buffer.extend(chunk)
+                if len(buffer) > MAX_IMAGE_BYTES:
+                    raise ImageProxyError("Imagem excede o tamanho maximo permitido")
+
+            return bytes(buffer), content_type
+        finally:
+            await response.aclose()
+
+    raise ImageProxyError("Redirects demais")

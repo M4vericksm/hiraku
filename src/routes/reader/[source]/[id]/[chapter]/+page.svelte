@@ -5,6 +5,8 @@
 	import { mangaStore } from '$lib/stores/manga.svelte';
 	import { ApiError, BackendApiService, resolveImageUrl, type Chapter } from '$lib/services/api';
 	import { offlineService } from '$lib/services/offline';
+	import { preferences, type ReadingMode } from '$lib/stores/preferences.svelte';
+	import { pushBackHandler } from '$lib/services/backButton';
 	import {
 		ArrowLeft,
 		Menu,
@@ -36,7 +38,9 @@
 	let isControlsVisible = $state(true);
 	let isLoading = $state(true);
 	let error = $state<string | null>(null);
-	let readingMode = $state<'rtl' | 'vertical'>('rtl');
+	// Modo de leitura vem das preferencias: escolher "Scroll" uma vez vale para
+	// os proximos capitulos tambem.
+	const readingMode = $derived(preferences.readingMode);
 	let sidebarOpen = $state(false);
 	let sidebarTab = $state<'chapters' | 'settings'>('chapters');
 	let isFullscreen = $state(false);
@@ -68,7 +72,7 @@
 	let touchStartX = 0;
 	let touchStartY = 0;
 
-	const READING_MODES: { value: 'rtl' | 'vertical'; label: string }[] = [
+	const READING_MODES: { value: ReadingMode; label: string }[] = [
 		{ value: 'rtl', label: 'Paginado' },
 		{ value: 'vertical', label: 'Scroll' }
 	];
@@ -298,9 +302,25 @@
 		isFullscreen = !!document.fullscreenElement;
 	}
 
+	let releaseBackHandler: (() => void) | null = null;
+
 	onMount(() => {
 		document.addEventListener('fullscreenchange', handleFullscreenChange);
 		resetControlsTimeout();
+
+		// No leitor o "voltar" fecha primeiro o que estiver por cima; so depois
+		// deixa o layout tratar a navegacao.
+		releaseBackHandler = pushBackHandler(() => {
+			if (sidebarOpen) {
+				sidebarOpen = false;
+				return true;
+			}
+			if (isFullscreen) {
+				void document.exitFullscreen().catch(() => {});
+				return true;
+			}
+			return false;
+		});
 	});
 
 	onDestroy(() => {
@@ -308,6 +328,7 @@
 		if (typeof document !== 'undefined') {
 			document.removeEventListener('fullscreenchange', handleFullscreenChange);
 		}
+		releaseBackHandler?.();
 		releasePages();
 	});
 
@@ -615,7 +636,7 @@
 										? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]'
 										: 'border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--text-muted)]'
 								)}
-								onclick={() => (readingMode = mode.value)}
+								onclick={() => preferences.setReadingMode(mode.value)}
 							>
 								{mode.label}
 							</button>

@@ -1,9 +1,9 @@
 from typing import Any
 
-import httpx
-
 from app.core.config import settings
+from app.core.http import get_client
 from app.domain.schemas import Chapter, ChapterPages, MangaSearchResult, SourceInfo
+from app.sources.genres import normalize_genres
 from app.sources.normalization import chapter_sort_key, parse_chapter_number, title_score
 
 
@@ -23,6 +23,7 @@ class MangaDexSource:
             ("title", query),
             ("limit", limit),
             ("includes[]", "cover_art"),
+            ("includes[]", "author"),
             ("availableTranslatedLanguage[]", settings.default_language),
             ("availableTranslatedLanguage[]", "en"),
         ]
@@ -62,10 +63,10 @@ class MangaDexSource:
         )
 
     async def _get(self, path: str, params: list[tuple[str, str | int]] | None = None) -> dict[str, Any]:
-        async with httpx.AsyncClient(base_url=settings.mangadex_base_url, timeout=20) as client:
-            response = await client.get(path, params=params)
-            response.raise_for_status()
-            return response.json()
+        url = f"{settings.mangadex_base_url.rstrip('/')}{path}"
+        response = await get_client().get(url, params=params)
+        response.raise_for_status()
+        return response.json()
 
     def _map_manga(self, item: dict[str, Any], query: str) -> MangaSearchResult:
         attrs = item.get("attributes", {})
@@ -89,6 +90,12 @@ class MangaDexSource:
         )
         primary_score = title_score(query, [title])
         alias_score = title_score(query, [*alt_titles, *title_map.values()]) * 0.93
+        tags = [
+            tag.get("attributes", {}).get("name", {}).get("en")
+            for tag in attrs.get("tags", [])
+            if isinstance(tag, dict)
+        ]
+        genres = normalize_genres([t for t in tags if isinstance(t, str)])
         return MangaSearchResult(
             source=self.info.id,
             source_id=item.get("id", ""),
@@ -96,6 +103,7 @@ class MangaDexSource:
             alt_titles=alt_titles[:8],
             description=description,
             cover_url=cover_url,
+            genres=genres,
             score=max(primary_score, alias_score),
         )
 
@@ -113,7 +121,9 @@ class MangaDexSource:
             volume=attrs.get("volume"),
             language=attrs.get("translatedLanguage"),
             pages=attrs.get("pages"),
-            external_url=attrs.get("externalUrl"),
+            # MangaDex manda "" quando o capitulo nao tem URL externa; HttpUrl
+            # rejeita string vazia e derrubava a lista inteira de capitulos.
+            external_url=attrs.get("externalUrl") or None,
             normalized_number=parse_chapter_number(chapter, title),
             sort_key=sort_key,
         )

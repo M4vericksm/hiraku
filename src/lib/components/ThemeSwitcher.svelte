@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { cn } from '$lib/utils';
+	import { preferences } from '$lib/stores/preferences.svelte';
 	import { Check } from 'lucide-svelte';
 
 	const themes = [
@@ -9,18 +9,7 @@
 		{ id: 'theme-paper', name: 'Paper', color: '#fcfcf7', border: '#b03030' }
 	];
 
-	let currentTheme = $state('theme-ink');
-
-	onMount(() => {
-		const saved = localStorage.getItem('hiraku-theme');
-		if (saved) currentTheme = saved;
-	});
-
-	function setTheme(id: string) {
-		currentTheme = id;
-		localStorage.setItem('hiraku-theme', id);
-		window.location.reload();
-	}
+	const currentTheme = $derived(preferences.theme);
 </script>
 
 <div class="flex flex-col gap-4">
@@ -34,7 +23,7 @@
 						? 'border-[var(--accent)]'
 						: 'border-transparent bg-[var(--bg-secondary)]'
 				)}
-				onclick={() => setTheme(theme.id)}
+				onclick={() => preferences.setTheme(theme.id)}
 			>
 				<div
 					class="flex h-12 w-12 items-center justify-center rounded-full border border-white/10"

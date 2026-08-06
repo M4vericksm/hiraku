@@ -2,6 +2,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
+from app.core.http import IMAGE_TIMEOUT, get_client
 from app.domain.schemas import Chapter, ChapterPages, MangaSearchResult, SourceInfo
 from app.services.catalog import CatalogService, get_catalog_service
 from app.services.images import ImageProxyError, fetch_image
@@ -96,8 +97,7 @@ async def image(url: str = Query(..., min_length=8)) -> Response:
     imagens sem CORS, mesmo quando elas carregam normalmente numa tag <img>.
     """
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-            content, content_type = await fetch_image(url, client)
+        content, content_type = await fetch_image(url, get_client(), timeout=IMAGE_TIMEOUT)
     except ImageProxyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
