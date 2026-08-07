@@ -1,16 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import {
-		ArrowLeft,
-		Palette,
-		Database,
-		Shield,
-		Globe,
-		BarChart2,
-		HardDrive,
-		Trash2,
-		Loader2
-	} from 'lucide-svelte';
+	import { ArrowLeft, Palette, Database, Shield, HardDrive, Trash2, Loader2 } from 'lucide-svelte';
 	import ThemeSwitcher from '$lib/components/ThemeSwitcher.svelte';
 	import { mangaStore } from '$lib/stores/manga.svelte';
 	import { offlineService, type OfflineChapterMeta } from '$lib/services/offline';
@@ -28,7 +18,6 @@
 
 	const stats = $derived({
 		total: mangaStore.library.length,
-		totalPages: mangaStore.library.reduce((s, m) => s + (m.totalPage || 0), 0),
 		pagesRead: mangaStore.library.reduce((s, m) => s + (m.lastReadPage || 0), 0),
 		completed: mangaStore.library.filter((m) => m.progress >= 100).length,
 		reading: mangaStore.library.filter((m) => m.progress > 0 && m.progress < 100).length
@@ -78,112 +67,97 @@
 	}
 </script>
 
-<main class="mx-auto max-w-4xl px-6 py-12 pb-24 text-[var(--text-primary)]">
-	<header class="mb-12 flex items-center gap-4">
+{#snippet sectionHead(icon: typeof Palette, label: string)}
+	{@const Icon = icon}
+	<div class="mb-6 flex items-center gap-3 border-b border-[var(--border)] pb-3">
+		<Icon class="h-4 w-4 text-[var(--accent)]" aria-hidden="true" />
+		<h2 class="text-sm font-bold tracking-[0.16em] text-[var(--text-primary)] uppercase">
+			{label}
+		</h2>
+	</div>
+{/snippet}
+
+<main class="mx-auto max-w-4xl px-6 py-10 pb-28 md:px-10 md:py-14 xl:pb-14">
+	<header class="mb-12 flex items-center gap-5">
 		<a
 			href={resolve('/')}
-			class="rounded-full p-2 transition-colors hover:bg-[var(--bg-secondary)]"
+			class="flex h-10 w-10 flex-shrink-0 items-center justify-center border border-[var(--rule)] text-[var(--text-primary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
 		>
-			<ArrowLeft class="h-6 w-6" />
+			<ArrowLeft class="h-4 w-4" aria-hidden="true" />
 		</a>
-		<h1 class="font-display text-4xl font-bold text-[var(--accent)]">Configurações</h1>
+		<div>
+			<p class="kicker mb-2">Preferências</p>
+			<h1 class="masthead text-[var(--text-primary)]" style="font-size:clamp(2rem, 6vw, 3.25rem)">
+				Configurações
+			</h1>
+		</div>
 	</header>
 
-	<div class="flex flex-col gap-12">
-		<!-- Stats Section -->
-		<section>
-			<div class="mb-6 flex items-center gap-3">
-				<BarChart2 class="h-6 w-6 text-[var(--accent)]" />
-				<h2 class="font-display flex-grow border-b border-[var(--border)] pb-1 text-xl font-bold">
-					Estatísticas
-				</h2>
-			</div>
-			<div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-				<div
-					class="card rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-secondary)] p-5 text-center"
-				>
-					<p class="font-display text-3xl font-black text-[var(--accent)]">{stats.total}</p>
-					<p class="font-body mt-1 text-[10px] tracking-widest text-[var(--text-muted)] uppercase">
-						Mangás
-					</p>
+	<div class="flex flex-col gap-14">
+		<!-- Estatisticas -->
+		<section aria-labelledby="stats-heading">
+			<h2 id="stats-heading" class="sr-only">Estatísticas</h2>
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+				<div class="registration border border-[var(--border)] px-4 py-6 text-center">
+					<p class="folio text-[var(--accent)]">{stats.total}</p>
+					<p class="kicker mt-2">Mangás</p>
 				</div>
-				<div
-					class="card rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-secondary)] p-5 text-center"
-				>
-					<p class="font-display text-3xl font-black text-[var(--accent)]">
+				<div class="registration border border-[var(--border)] px-4 py-6 text-center">
+					<p class="folio tabular text-[var(--accent)]">
 						{stats.pagesRead.toLocaleString('pt-BR')}
 					</p>
-					<p class="font-body mt-1 text-[10px] tracking-widest text-[var(--text-muted)] uppercase">
-						Pág. Lidas
-					</p>
+					<p class="kicker mt-2">Pág. lidas</p>
 				</div>
-				<div
-					class="card rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-secondary)] p-5 text-center"
-				>
-					<p class="font-display text-3xl font-black text-[var(--accent)]">{stats.reading}</p>
-					<p class="font-body mt-1 text-[10px] tracking-widest text-[var(--text-muted)] uppercase">
-						Em Andamento
-					</p>
+				<div class="registration border border-[var(--border)] px-4 py-6 text-center">
+					<p class="folio text-[var(--accent)]">{stats.reading}</p>
+					<p class="kicker mt-2">Em andamento</p>
 				</div>
-				<div
-					class="card rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-secondary)] p-5 text-center"
-				>
-					<p class="font-display text-3xl font-black text-[var(--accent)]">{stats.completed}</p>
-					<p class="font-body mt-1 text-[10px] tracking-widest text-[var(--text-muted)] uppercase">
-						Concluídos
-					</p>
+				<div class="registration border border-[var(--border)] px-4 py-6 text-center">
+					<p class="folio text-[var(--accent)]">{stats.completed}</p>
+					<p class="kicker mt-2">Concluídos</p>
 				</div>
 			</div>
 		</section>
 
-		<!-- Appearance Section -->
-		<section>
-			<div class="mb-6 flex items-center gap-3">
-				<Palette class="h-6 w-6 text-[var(--accent)]" />
-				<h2 class="font-display flex-grow border-b border-[var(--border)] pb-1 text-xl font-bold">
-					Aparência
-				</h2>
+		<!-- Aparencia -->
+		<section aria-labelledby="appearance-heading">
+			<div id="appearance-heading">
+				{@render sectionHead(Palette, 'Aparência')}
 			</div>
-			<p class="font-body -mt-4 mb-6 text-sm text-[var(--text-secondary)]">
+			<p class="-mt-3 mb-6 text-sm text-[var(--text-secondary)]">
 				Personalize as cores e o estilo do seu leitor.
 			</p>
-
 			<ThemeSwitcher />
 		</section>
 
-		<!-- Downloads Section -->
-		<section>
-			<div class="mb-6 flex items-center gap-3">
-				<HardDrive class="h-6 w-6 text-[var(--accent)]" />
-				<h2 class="font-display flex-grow border-b border-[var(--border)] pb-1 text-xl font-bold">
-					Downloads
-				</h2>
+		<!-- Downloads -->
+		<section aria-labelledby="downloads-heading">
+			<div id="downloads-heading">
+				{@render sectionHead(HardDrive, 'Downloads')}
 			</div>
-			<p class="font-body -mt-4 mb-6 text-sm text-[var(--text-secondary)]">
+			<p class="-mt-3 mb-6 text-sm text-[var(--text-secondary)]">
 				Capítulos salvos no dispositivo para leitura offline.
 			</p>
 
 			{#if downloadsLoading}
-				<div class="flex items-center justify-center py-8">
-					<Loader2 class="h-6 w-6 animate-spin text-[var(--accent)]" />
+				<div class="flex items-center justify-center py-10">
+					<Loader2 class="h-5 w-5 animate-spin text-[var(--accent)]" aria-hidden="true" />
 				</div>
 			{:else if downloads.length === 0}
 				<div
-					class="card rounded-[var(--radius)] border border-dashed border-[var(--border)] p-8 text-center text-sm text-[var(--text-muted)]"
+					class="border border-dashed border-[var(--rule)] px-6 py-14 text-center text-sm text-[var(--text-muted)]"
 				>
 					Nenhum capítulo baixado ainda. Use o botão de download na lista de capítulos.
 				</div>
 			{:else}
-				<div
-					class="card mb-4 flex items-center justify-between rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-secondary)] p-6"
-				>
+				<div class="card mb-4 flex items-center justify-between p-5">
 					<div>
-						<h4 class="font-body mb-1 font-bold">
+						<p class="text-sm font-semibold text-[var(--text-primary)]">
 							{downloads.length} capítulo{downloads.length !== 1 ? 's' : ''} · {formatBytes(
 								totalDownloadSize
 							)}
-						</h4>
-						<p class="font-body text-xs text-[var(--text-muted)]">
+						</p>
+						<p class="mt-0.5 text-xs text-[var(--text-muted)]">
 							{confirmClearDownloads
 								? 'Clique novamente para apagar todos.'
 								: 'Espaço ocupado no dispositivo.'}
@@ -192,29 +166,31 @@
 					<button
 						onclick={handleClearDownloads}
 						class={[
-							'rounded-[var(--radius)] px-4 py-2 text-sm font-bold uppercase transition-all',
+							'flex-shrink-0 border px-3.5 py-2 text-[0.625rem] font-bold tracking-[0.14em] uppercase transition-all',
 							confirmClearDownloads
-								? 'animate-pulse bg-red-500 text-white'
-								: 'border border-red-500/30 text-red-500 hover:bg-red-500/10'
+								? 'animate-pulse border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]'
+								: 'border-[var(--accent)]/30 text-[var(--accent)] hover:bg-[var(--accent)]/10'
 						].join(' ')}
 					>
-						{confirmClearDownloads ? 'CONFIRMAR' : 'APAGAR TUDO'}
+						{confirmClearDownloads ? 'Confirmar' : 'Apagar tudo'}
 					</button>
 				</div>
 
 				<div class="flex flex-col gap-2">
 					{#each downloads as item (item.source + item.mangaId + item.chapterId)}
 						<div
-							class="flex items-center justify-between gap-4 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-secondary)] p-4"
+							class="flex items-center justify-between gap-4 border border-[var(--border)] bg-[var(--bg-secondary)] p-4"
 						>
 							<a
 								href={resolve(`/reader/${item.source}/${item.mangaId}/${item.chapterId}`)}
 								class="min-w-0 flex-1"
 							>
-								<h4 class="font-body truncate text-sm font-bold hover:text-[var(--accent)]">
+								<h4
+									class="truncate text-sm font-semibold text-[var(--text-primary)] hover:text-[var(--accent)]"
+								>
 									{item.mangaTitle ?? item.mangaId}
 								</h4>
-								<p class="font-body mt-0.5 truncate text-xs text-[var(--text-muted)]">
+								<p class="mt-0.5 truncate text-xs text-[var(--text-muted)]">
 									{item.chapter ? `Cap. ${item.chapter}` : (item.title ?? 'Capítulo')} ·
 									{item.pageCount} pág. · {formatBytes(item.sizeBytes)} · {item.source}
 								</p>
@@ -222,9 +198,9 @@
 							<button
 								onclick={() => removeDownload(item)}
 								title="Apagar download"
-								class="flex-shrink-0 rounded-full p-2 text-[var(--text-muted)] transition-colors hover:bg-red-500/10 hover:text-red-500"
+								class="flex-shrink-0 p-2 text-[var(--text-muted)] transition-colors hover:text-[var(--accent)]"
 							>
-								<Trash2 class="h-4 w-4" />
+								<Trash2 class="h-4 w-4" aria-hidden="true" />
 							</button>
 						</div>
 					{/each}
@@ -232,24 +208,19 @@
 			{/if}
 		</section>
 
-		<!-- Storage Section -->
-		<section>
-			<div class="mb-6 flex items-center gap-3">
-				<Database class="h-6 w-6 text-[var(--accent)]" />
-				<h2 class="font-display flex-grow border-b border-[var(--border)] pb-1 text-xl font-bold">
-					Armazenamento
-				</h2>
+		<!-- Armazenamento -->
+		<section aria-labelledby="storage-heading">
+			<div id="storage-heading">
+				{@render sectionHead(Database, 'Armazenamento')}
 			</div>
-			<p class="font-body -mt-4 mb-6 text-sm text-[var(--text-secondary)]">
+			<p class="-mt-3 mb-6 text-sm text-[var(--text-secondary)]">
 				Dados salvos localmente no seu dispositivo.
 			</p>
 
-			<div
-				class="card flex items-center justify-between rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-secondary)] p-6"
-			>
+			<div class="card flex items-center justify-between p-6">
 				<div>
-					<h4 class="font-body mb-1 font-bold">Limpar Biblioteca</h4>
-					<p class="font-body text-xs text-[var(--text-muted)]">
+					<p class="text-sm font-semibold text-[var(--text-primary)]">Limpar biblioteca</p>
+					<p class="mt-0.5 text-xs text-[var(--text-muted)]">
 						{mangaStore.library.length} mangá{mangaStore.library.length !== 1 ? 's' : ''} na biblioteca.
 						{confirmClear
 							? 'Clique novamente para confirmar.'
@@ -260,29 +231,24 @@
 					onclick={handleClearAll}
 					disabled={mangaStore.library.length === 0}
 					class={[
-						'rounded-[var(--radius)] px-4 py-2 text-sm font-bold uppercase transition-all',
+						'flex-shrink-0 border px-3.5 py-2 text-[0.625rem] font-bold tracking-[0.14em] uppercase transition-all',
 						confirmClear
-							? 'animate-pulse bg-red-500 text-white'
-							: 'border border-red-500/30 text-red-500 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-30'
+							? 'animate-pulse border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]'
+							: 'border-[var(--accent)]/30 text-[var(--accent)] hover:bg-[var(--accent)]/10 disabled:cursor-not-allowed disabled:opacity-30'
 					].join(' ')}
 				>
-					{confirmClear ? 'CONFIRMAR' : 'LIMPAR TUDO'}
+					{confirmClear ? 'Confirmar' : 'Limpar tudo'}
 				</button>
 			</div>
 		</section>
 
-		<!-- Privacy Section -->
-		<section>
-			<div class="mb-6 flex items-center gap-3">
-				<Shield class="h-6 w-6 text-[var(--accent)]" />
-				<h2 class="font-display flex-grow border-b border-[var(--border)] pb-1 text-xl font-bold">
-					Privacidade
-				</h2>
+		<!-- Privacidade -->
+		<section aria-labelledby="privacy-heading">
+			<div id="privacy-heading">
+				{@render sectionHead(Shield, 'Privacidade')}
 			</div>
-			<div
-				class="card rounded-[var(--radius)] border border-[var(--accent)]/20 bg-[var(--accent)]/5 p-6"
-			>
-				<p class="font-body text-sm leading-relaxed">
+			<div class="registration border border-[var(--accent)]/25 bg-[var(--accent)]/5 p-6">
+				<p class="text-sm leading-relaxed text-[var(--text-secondary)]">
 					O <strong class="text-[var(--accent)]">Hiraku</strong> guarda sua biblioteca, seu progresso
 					e os capítulos baixados apenas no seu dispositivo. O servidor é usado somente para consultar
 					as fontes e servir as imagens. Não coletamos dados de uso.
@@ -291,13 +257,11 @@
 		</section>
 
 		<footer
-			class="font-body mt-12 flex items-center justify-center gap-6 text-sm text-[var(--text-muted)] italic"
+			class="mt-4 flex items-center justify-center gap-4 text-[0.625rem] font-bold tracking-[0.18em] text-[var(--text-muted)] uppercase"
 		>
-			<div class="flex items-center gap-2">
-				<Globe class="h-4 w-4" /> v1.1
-			</div>
-			<span>•</span>
-			<span>Orgulhosamente construído com Svelte 5</span>
+			<span>Local · v1.1</span>
+			<span aria-hidden="true">·</span>
+			<span>Construído com Svelte 5</span>
 		</footer>
 	</div>
 </main>
