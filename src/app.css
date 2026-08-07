@@ -1,82 +1,119 @@
 @import 'tailwindcss';
 
-@theme {
-	--font-display: 'Syne', sans-serif;
-	--font-body: 'DM Sans', sans-serif;
-	--font-mono: 'DM Mono', monospace;
+/*
+ * HIRAKU — sistema visual "tankobon".
+ *
+ * A referencia nao e jornal, e o volume encadernado de manga: lombada com
+ * numeracao vertical, obi (a faixa de papel na base da capa) carregando a
+ * informacao de progresso, e marcas de registro de impressao nos cantos.
+ * A arte da capa e o conteudo principal, entao o resto do cromo fica quieto:
+ * tipografia condensada pesada apenas nos titulos e nos numerais.
+ */
 
-	--color-accent: #e53935;
+@theme {
+	--font-display: 'Anton', 'Arial Narrow', sans-serif;
+	--font-body: 'DM Sans', system-ui, sans-serif;
+
+	--color-accent: var(--accent);
+	--color-ink: var(--bg-primary);
+	--color-paper: var(--bg-secondary);
 }
 
 @layer base {
-	:root {
-		--font-display: 'Syne', sans-serif;
-		--font-body: 'DM Sans', sans-serif;
-		--font-mono: 'DM Mono', monospace;
-	}
-
-	/* Theme: Ink (Dark) - Default */
+	/* Theme: Ink (escuro) — padrao */
 	:root,
 	.theme-ink {
 		--bg-primary: #0a0a0a;
-		--bg-secondary: #1a1a1a;
-		--bg-accent: #2a2a2a;
+		--bg-secondary: #141414;
+		--bg-accent: #1f1f1f;
 
-		--text-primary: #f5f5f5;
-		--text-secondary: #a0a0a0;
-		--text-muted: #666666;
+		--text-primary: #f5f5f0;
+		--text-secondary: #a3a3a0;
+		--text-muted: #6b6b68;
 
-		--accent: #e53935; /* Burnt Red */
+		--accent: #e53935;
 		--accent-hover: #ff5252;
 		--accent-foreground: #ffffff;
 
-		--border: #333333;
-		--radius: 0.5rem;
+		--border: #2a2a2a;
+		--rule: #3d3d3d;
+
+		/* Trama de meio-tom: da textura de papel impresso sem virar imagem. */
+		--halftone: rgba(255, 255, 255, 0.045);
+		--overlay: rgba(0, 0, 0, 0.72);
 	}
 
-	/* Theme: Neon (Dark) */
+	/* Theme: Neon (escuro) */
 	.theme-neon {
 		--bg-primary: #050b1a;
-		--bg-secondary: #0d152a;
-		--bg-accent: #152040;
+		--bg-secondary: #0b1327;
+		--bg-accent: #16203d;
 
-		--text-primary: #e0e7ff;
+		--text-primary: #e6ebff;
 		--text-secondary: #94a3b8;
-		--text-muted: #475569;
+		--text-muted: #5b6a83;
 
-		--accent: #8b5cf6; /* Purple */
+		--accent: #8b5cf6;
 		--accent-hover: #a78bfa;
 		--accent-foreground: #ffffff;
 
-		--border: #1e293b;
+		--border: #1c2942;
+		--rule: #2d3d5c;
+
+		--halftone: rgba(139, 92, 246, 0.07);
+		--overlay: rgba(5, 11, 26, 0.78);
 	}
 
-	/* Theme: Paper (Light) */
+	/* Theme: Paper (claro) */
 	.theme-paper {
-		--bg-primary: #fcfcf7; /* Aged Beige */
-		--bg-secondary: #f3f3eb;
-		--bg-accent: #eaeae0;
+		--bg-primary: #f7f5ef;
+		--bg-secondary: #ffffff;
+		--bg-accent: #eceae0;
 
-		--text-primary: #1a1a1a;
-		--text-secondary: #4a4a4a;
-		--text-muted: #808080;
+		--text-primary: #17171a;
+		--text-secondary: #4d4d52;
+		--text-muted: #8a8a85;
 
-		--accent: #b03030; /* Editorial Red */
-		--accent-hover: #d32f2f;
+		--accent: #b02a2a;
+		--accent-hover: #8f1f1f;
 		--accent-foreground: #ffffff;
 
-		--border: #e0e0d0;
+		--border: #ddd9cb;
+		--rule: #c4bfad;
+
+		--halftone: rgba(23, 23, 26, 0.04);
+		--overlay: rgba(23, 23, 26, 0.7);
+	}
+
+	:root {
+		--radius: 0.25rem;
+		--radius-lg: 0.625rem;
+
+		/* Reduz o repique do scroll quando o leitor troca de pagina. */
+		scroll-behavior: smooth;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		:root {
+			scroll-behavior: auto;
+		}
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0.01ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: 0.01ms !important;
+		}
 	}
 
 	body {
 		background-color: var(--bg-primary);
 		color: var(--text-primary);
 		font-family: var(--font-body);
+		font-feature-settings: 'ss01', 'cv01';
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
-		transition:
-			background-color 0.3s ease,
-			color 0.3s ease;
+		text-rendering: optimizeLegibility;
 	}
 
 	h1,
@@ -86,31 +123,237 @@
 	h5,
 	h6 {
 		font-family: var(--font-display);
-		font-weight: 700;
+		font-weight: 400;
+		letter-spacing: 0.01em;
+	}
+
+	/* Foco visivel e consistente: a versao anterior removia o outline sem repor. */
+	:focus-visible {
+		outline: 2px solid var(--accent);
+		outline-offset: 2px;
+	}
+
+	::selection {
+		background-color: var(--accent);
+		color: var(--accent-foreground);
+	}
+
+	/* Barras de rolagem discretas, alinhadas ao tema. */
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: var(--rule) transparent;
+	}
+	::-webkit-scrollbar {
+		width: 10px;
+		height: 10px;
+	}
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	::-webkit-scrollbar-thumb {
+		background-color: var(--rule);
+		border: 3px solid transparent;
+		background-clip: content-box;
+		border-radius: 999px;
 	}
 }
 
 @layer components {
+	/* ---------- Tipografia editorial ---------- */
+
+	/* Masthead: o titulo grande de cada tela. Condensado, caixa alta, apertado. */
+	.masthead {
+		font-family: var(--font-display);
+		font-size: clamp(2.75rem, 9vw, 5.5rem);
+		line-height: 0.86;
+		letter-spacing: -0.015em;
+		text-transform: uppercase;
+	}
+
+	/* Kicker: a etiqueta tecnica acima do masthead. */
+	.kicker {
+		font-family: var(--font-body);
+		font-size: 0.625rem;
+		font-weight: 700;
+		letter-spacing: 0.28em;
+		text-transform: uppercase;
+		color: var(--text-muted);
+	}
+
+	/* Numeral de secao, do tamanho de um folio de revista. */
+	.folio {
+		font-family: var(--font-display);
+		font-size: clamp(2rem, 5vw, 3rem);
+		line-height: 1;
+		color: var(--rule);
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* Tipo vertical japones, usado nas lombadas. */
+	.tategaki {
+		writing-mode: vertical-rl;
+		text-orientation: upright;
+		letter-spacing: 0.35em;
+	}
+
+	/* ---------- Estrutura ---------- */
+
+	/* Regra dupla: a assinatura que separa cabecalho de conteudo. */
+	.rule-double {
+		border-top: 3px solid var(--text-primary);
+		border-bottom: 1px solid var(--rule);
+		height: 5px;
+	}
+
+	/* Marcas de registro de impressao nos cantos de um bloco. */
+	.registration {
+		position: relative;
+	}
+	.registration::before,
+	.registration::after {
+		content: '';
+		position: absolute;
+		width: 10px;
+		height: 10px;
+		border-color: var(--rule);
+		pointer-events: none;
+	}
+	.registration::before {
+		top: -1px;
+		left: -1px;
+		border-top: 1px solid;
+		border-left: 1px solid;
+	}
+	.registration::after {
+		right: -1px;
+		bottom: -1px;
+		border-right: 1px solid;
+		border-bottom: 1px solid;
+	}
+
+	/* Textura de meio-tom. Fica no fundo de faixas largas. */
+	.halftone {
+		background-image: radial-gradient(var(--halftone) 1px, transparent 1px);
+		background-size: 6px 6px;
+	}
+
+	/* ---------- Volume (a capa como um tankobon) ---------- */
+
+	/* Lombada: a fatia escura na borda esquerda da capa. */
+	.volume {
+		position: relative;
+		background-color: var(--bg-accent);
+		overflow: hidden;
+		box-shadow:
+			inset 3px 0 0 rgb(0 0 0 / 0.35),
+			inset 4px 0 0 rgb(255 255 255 / 0.08);
+	}
+
+	/* Obi: a faixa de papel na base da capa. Carrega progresso e metadados. */
+	.obi {
+		background-color: var(--bg-secondary);
+		border-top: 1px solid var(--accent);
+		font-family: var(--font-body);
+		font-size: 0.5625rem;
+		font-weight: 700;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+	}
+
+	/* ---------- Controles ---------- */
+
 	.btn-primary {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
 		background-color: var(--accent);
 		color: var(--accent-foreground);
-		padding: 0.5rem 1rem;
+		padding: 0.6875rem 1.25rem;
 		border-radius: var(--radius);
-		font-weight: 500;
-		transition: all 0.2s;
+		font-family: var(--font-body);
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		transition:
+			background-color 0.18s ease,
+			transform 0.12s ease;
 	}
-
-	.btn-primary:hover {
+	.btn-primary:hover:not(:disabled) {
 		background-color: var(--accent-hover);
 	}
-
-	.btn-primary:active {
-		transform: scale(0.95);
+	.btn-primary:active:not(:disabled) {
+		transform: translateY(1px);
+	}
+	.btn-primary:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
 	}
 
-	.btn-primary:disabled {
-		opacity: 0.5;
+	.btn-ghost {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		border: 1px solid var(--rule);
+		color: var(--text-primary);
+		padding: 0.625rem 1.25rem;
+		border-radius: var(--radius);
+		font-family: var(--font-body);
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		transition:
+			border-color 0.18s ease,
+			color 0.18s ease,
+			background-color 0.18s ease;
+	}
+	.btn-ghost:hover:not(:disabled) {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+	.btn-ghost:disabled {
+		opacity: 0.35;
 		cursor: not-allowed;
+	}
+
+	.field {
+		width: 100%;
+		background-color: transparent;
+		border: 0;
+		border-bottom: 1px solid var(--rule);
+		color: var(--text-primary);
+		font-family: var(--font-body);
+		padding: 0.625rem 0;
+		transition: border-color 0.18s ease;
+	}
+	.field::placeholder {
+		color: var(--text-muted);
+	}
+	.field:focus {
+		outline: none;
+		border-bottom-color: var(--accent);
+	}
+
+	.select {
+		width: 100%;
+		background-color: var(--bg-secondary);
+		border: 1px solid var(--rule);
+		color: var(--text-primary);
+		font-family: var(--font-body);
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		padding: 0.625rem 0.875rem;
+		border-radius: var(--radius);
+		transition: border-color 0.18s ease;
+	}
+	.select:focus {
+		outline: none;
+		border-color: var(--accent);
 	}
 
 	.card {
@@ -118,5 +361,87 @@
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
 		overflow: hidden;
+	}
+
+	/* Etiqueta pequena: fonte, genero, idioma. Um traco, nao um pilula colorida. */
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		border: 1px solid var(--rule);
+		color: var(--text-secondary);
+		padding: 0.25rem 0.5rem;
+		font-family: var(--font-body);
+		font-size: 0.5625rem;
+		font-weight: 700;
+		letter-spacing: 0.14em;
+		text-transform: uppercase;
+	}
+	.chip-accent {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	/* Carimbo: selo levemente rotacionado, tom de tinta de impressao. Usado para
+	   estados como "offline" ou "lido" — reforca o vocabulario de papel. */
+	.stamp {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3125rem;
+		border: 1.5px solid currentColor;
+		border-radius: var(--radius);
+		padding: 0.1875rem 0.4375rem;
+		font-family: var(--font-body);
+		font-size: 0.5625rem;
+		font-weight: 800;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		transform: rotate(-2deg);
+	}
+
+	/* Link com sublinhado que varre da esquerda no hover, em vez de aparecer inteiro. */
+	.link-sweep {
+		position: relative;
+		display: inline-block;
+	}
+	.link-sweep::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		bottom: -2px;
+		width: 100%;
+		height: 1px;
+		background-color: currentColor;
+		transform: scaleX(0);
+		transform-origin: left;
+		transition: transform 0.25s ease;
+	}
+	.link-sweep:hover::after {
+		transform: scaleX(1);
+	}
+
+	/* Placeholder de carregamento com o mesmo peso visual do conteudo final. */
+	.shimmer {
+		position: relative;
+		overflow: hidden;
+		background-color: var(--bg-accent);
+	}
+	.shimmer::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(90deg, transparent, var(--halftone), transparent);
+		animation: shimmer 1.4s infinite;
+	}
+	@keyframes shimmer {
+		100% {
+			transform: translateX(100%);
+		}
+	}
+}
+
+@layer utilities {
+	.tabular {
+		font-variant-numeric: tabular-nums;
 	}
 }

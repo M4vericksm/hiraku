@@ -350,102 +350,107 @@
 
 <svelte:window onkeydown={handleKeyDown} onmousemove={handleMouseMove} />
 
-<div class="fixed inset-0 overflow-hidden bg-[var(--bg-primary)] select-none">
+<div class="fixed inset-0 overflow-hidden bg-black select-none">
 	{#if isLoading}
-		<div class="flex h-full flex-col items-center justify-center gap-4 text-[var(--text-primary)]">
-			<Loader2 class="h-12 w-12 animate-spin text-[var(--accent)]" />
-			<p class="font-bold tracking-widest uppercase">Carregando capítulo...</p>
+		<div class="flex h-full flex-col items-center justify-center gap-5 text-white">
+			<Loader2 class="h-10 w-10 animate-spin text-[var(--accent)]" aria-hidden="true" />
+			<p class="kicker text-white/70">Carregando capítulo</p>
 		</div>
 	{:else if error}
-		<div
-			class="flex h-full flex-col items-center justify-center p-6 text-center text-[var(--text-primary)]"
-		>
-			<div class="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-red-500/10">
-				<AlertCircle class="h-12 w-12 text-red-500" />
+		<div class="flex h-full flex-col items-center justify-center p-6 text-center text-white">
+			<div class="registration mb-6 border border-[var(--accent)] p-6">
+				<AlertCircle class="h-10 w-10 text-[var(--accent)]" aria-hidden="true" />
 			</div>
-			<h2 class="mb-2 text-2xl font-bold">Erro de Leitura</h2>
-			<p class="mb-8 text-[var(--text-secondary)]">{error}</p>
-			<a href={resolve(`/manga/${source}/${id}`)} class="btn-primary"> Voltar ao Mangá </a>
+			<p class="kicker mb-3 text-white/50">Erro de leitura</p>
+			<h2 class="masthead mb-4 text-balance" style="font-size:clamp(1.75rem, 5vw, 2.75rem)">
+				Não deu pra abrir
+			</h2>
+			<p class="mb-8 max-w-sm text-sm text-white/70">{error}</p>
+			<a href={resolve(`/manga/${source}/${id}`)} class="btn-primary">Voltar ao mangá</a>
 		</div>
 	{:else}
 		<!-- TOP BAR -->
 		<div
 			class={cn(
-				'absolute top-0 right-0 left-0 z-50 flex transform items-center justify-between bg-gradient-to-b from-black/80 to-transparent p-4 px-6 text-white transition-all duration-300',
+				'absolute top-0 right-0 left-0 z-50 flex transform items-center justify-between bg-gradient-to-b from-black/85 to-transparent p-4 px-6 text-white transition-all duration-300',
 				isControlsVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
 			)}
 		>
 			<div class="flex min-w-0 items-center gap-4">
 				<a
 					href={resolve(`/manga/${source}/${id}`)}
-					class="rounded-full p-2 transition-colors hover:bg-white/20"
+					class="flex h-9 w-9 flex-shrink-0 items-center justify-center border border-white/15 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
 					onclick={(e) => e.stopPropagation()}
 				>
-					<ArrowLeft class="h-6 w-6" />
+					<ArrowLeft class="h-4 w-4" aria-hidden="true" />
 				</a>
 				<div class="min-w-0">
-					<h1 class="line-clamp-1 font-bold">
+					<h1 class="line-clamp-1 text-sm font-semibold">
 						{manga?.title ?? 'Leitura'}
 						{#if chapterLabel}
-							<span class="opacity-70">— {chapterLabel}</span>
+							<span class="text-white/60">— {chapterLabel}</span>
 						{/if}
 					</h1>
-					<p class="flex items-center gap-2 text-xs opacity-80">
-						Página {currentPage} / {pageUrls.length}
+					<p
+						class="mt-0.5 flex items-center gap-2 text-[0.625rem] font-bold tracking-[0.16em] text-white/60 uppercase"
+					>
+						<span class="tabular">Pág. {currentPage}/{pageUrls.length}</span>
 						{#if isOfflineSource}
-							<span class="flex items-center gap-1 text-green-400">
-								<WifiOff class="h-3 w-3" /> Offline
+							<span class="stamp text-green-400">
+								<WifiOff class="h-2.5 w-2.5" aria-hidden="true" /> Offline
 							</span>
 						{/if}
 					</p>
 				</div>
 			</div>
-			<div class="flex items-center gap-2">
+			<div class="flex items-center gap-1">
 				<button
-					class="rounded-full p-2 transition-colors hover:bg-white/20"
+					class="flex h-9 w-9 items-center justify-center transition-colors hover:text-[var(--accent)] disabled:opacity-40"
 					onclick={(e) => {
 						e.stopPropagation();
 						zoomOut();
 					}}
 					disabled={zoomLevel <= MIN_ZOOM}
 				>
-					<ZoomOut class="h-5 w-5" />
+					<ZoomOut class="h-4 w-4" aria-hidden="true" />
 				</button>
-				<span class="w-12 text-center text-xs font-bold">{Math.round(zoomLevel * 100)}%</span>
+				<span class="tabular w-11 text-center text-xs font-bold"
+					>{Math.round(zoomLevel * 100)}%</span
+				>
 				<button
-					class="rounded-full p-2 transition-colors hover:bg-white/20"
+					class="flex h-9 w-9 items-center justify-center transition-colors hover:text-[var(--accent)] disabled:opacity-40"
 					onclick={(e) => {
 						e.stopPropagation();
 						zoomIn();
 					}}
 					disabled={zoomLevel >= MAX_ZOOM}
 				>
-					<ZoomIn class="h-5 w-5" />
+					<ZoomIn class="h-4 w-4" aria-hidden="true" />
 				</button>
 
-				<div class="mx-2 h-6 w-px bg-white/20"></div>
+				<div class="mx-2 h-5 w-px bg-white/20"></div>
 
 				<button
-					class="hidden rounded-full p-2 transition-colors hover:bg-white/20 sm:block"
+					class="hidden h-9 w-9 items-center justify-center transition-colors hover:text-[var(--accent)] sm:flex"
 					onclick={(e) => {
 						e.stopPropagation();
 						toggleFullscreen();
 					}}
 				>
 					{#if isFullscreen}
-						<Minimize2 class="h-5 w-5" />
+						<Minimize2 class="h-4 w-4" aria-hidden="true" />
 					{:else}
-						<Maximize2 class="h-5 w-5" />
+						<Maximize2 class="h-4 w-4" aria-hidden="true" />
 					{/if}
 				</button>
 				<button
-					class="rounded-full p-2 transition-colors hover:bg-white/20"
+					class="flex h-9 w-9 items-center justify-center transition-colors hover:text-[var(--accent)]"
 					onclick={(e) => {
 						e.stopPropagation();
 						sidebarOpen = true;
 					}}
 				>
-					<Menu class="h-5 w-5" />
+					<Menu class="h-4 w-4" aria-hidden="true" />
 				</button>
 			</div>
 		</div>
@@ -477,7 +482,7 @@
 			{#if readingMode === 'vertical'}
 				<div
 					bind:this={verticalContainer}
-					class="h-full w-full overflow-x-hidden overflow-y-auto bg-[var(--bg-secondary)]"
+					class="h-full w-full overflow-x-hidden overflow-y-auto bg-black"
 					onscroll={handleVerticalScroll}
 				>
 					<div class="mx-auto flex w-full flex-col items-center pb-24 md:max-w-[720px]">
@@ -493,7 +498,7 @@
 						{/each}
 
 						<!-- Fim do capitulo: continuar sem voltar para a lista -->
-						<div class="flex w-full flex-col items-center gap-3 px-6 py-12">
+						<div class="flex w-full flex-col items-center gap-4 px-6 py-16">
 							{#if nextChapter}
 								<button
 									class="btn-primary w-full max-w-sm"
@@ -502,11 +507,11 @@
 									Próximo capítulo
 								</button>
 							{:else}
-								<p class="text-sm text-[var(--text-muted)]">Você chegou ao último capítulo.</p>
+								<p class="kicker text-white/50">Você chegou ao último capítulo</p>
 							{/if}
 							<a
 								href={resolve(`/manga/${source}/${id}`)}
-								class="text-sm text-[var(--text-secondary)] hover:text-[var(--accent)]"
+								class="link-sweep text-sm text-white/70 hover:text-[var(--accent)]"
 							>
 								Voltar aos capítulos
 							</a>
@@ -531,13 +536,13 @@
 		{#if readingMode !== 'vertical'}
 			<div
 				class={cn(
-					'absolute right-0 bottom-0 left-0 z-50 flex transform items-center justify-between bg-gradient-to-t from-black/80 to-transparent p-6 text-white transition-all duration-300',
+					'absolute right-0 bottom-0 left-0 z-50 flex transform items-center justify-between bg-gradient-to-t from-black/85 to-transparent p-6 text-white transition-all duration-300',
 					isControlsVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0',
 					sidebarOpen ? 'mr-80' : ''
 				)}
 			>
 				<button
-					class="flex items-center gap-2 rounded-full p-3 transition-colors hover:bg-white/20 disabled:opacity-50"
+					class="flex h-11 w-11 items-center justify-center border border-white/15 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-30"
 					onclick={(e) => {
 						e.stopPropagation();
 						pageLeft();
@@ -546,7 +551,7 @@
 						? currentPage >= pageUrls.length && !nextChapter
 						: currentPage <= 1 && !prevChapter}
 				>
-					<ChevronLeft class="h-6 w-6" />
+					<ChevronLeft class="h-5 w-5" aria-hidden="true" />
 				</button>
 
 				<div class="flex-1 px-8">
@@ -563,7 +568,7 @@
 				</div>
 
 				<button
-					class="flex items-center gap-2 rounded-full p-3 transition-colors hover:bg-white/20 disabled:opacity-50"
+					class="flex h-11 w-11 items-center justify-center border border-white/15 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-30"
 					onclick={(e) => {
 						e.stopPropagation();
 						pageRight();
@@ -572,7 +577,7 @@
 						? currentPage <= 1 && !prevChapter
 						: currentPage >= pageUrls.length && !nextChapter}
 				>
-					<ChevronRight class="h-6 w-6" />
+					<ChevronRight class="h-5 w-5" aria-hidden="true" />
 				</button>
 			</div>
 		{/if}
@@ -581,7 +586,7 @@
 		{#if sidebarOpen}
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div class="absolute inset-0 z-40 bg-black/50" onclick={() => (sidebarOpen = false)}></div>
+			<div class="absolute inset-0 z-40 bg-black/60" onclick={() => (sidebarOpen = false)}></div>
 		{/if}
 		<div
 			class={cn(
@@ -589,52 +594,50 @@
 				sidebarOpen ? 'translate-x-0' : 'translate-x-full'
 			)}
 		>
-			<div class="flex items-center justify-between border-b border-[var(--border)] p-4">
+			<div class="flex items-center justify-between border-b border-[var(--border)] p-3">
 				<div class="flex gap-1">
 					<button
 						class={cn(
-							'flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold transition-colors',
+							'flex items-center gap-1.5 px-3 py-2 text-[0.625rem] font-bold tracking-[0.14em] uppercase transition-colors',
 							sidebarTab === 'chapters'
 								? 'bg-[var(--accent)]/10 text-[var(--accent)]'
-								: 'text-[var(--text-secondary)] hover:bg-[var(--bg-accent)]/10'
+								: 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
 						)}
 						onclick={() => (sidebarTab = 'chapters')}
 					>
-						<List class="h-4 w-4" /> Capítulos
+						<List class="h-3.5 w-3.5" aria-hidden="true" /> Capítulos
 					</button>
 					<button
 						class={cn(
-							'flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold transition-colors',
+							'flex items-center gap-1.5 px-3 py-2 text-[0.625rem] font-bold tracking-[0.14em] uppercase transition-colors',
 							sidebarTab === 'settings'
 								? 'bg-[var(--accent)]/10 text-[var(--accent)]'
-								: 'text-[var(--text-secondary)] hover:bg-[var(--bg-accent)]/10'
+								: 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
 						)}
 						onclick={() => (sidebarTab = 'settings')}
 					>
-						<Settings class="h-4 w-4" /> Ajustes
+						<Settings class="h-3.5 w-3.5" aria-hidden="true" /> Ajustes
 					</button>
 				</div>
 				<button
-					class="rounded-full p-2 transition-colors hover:bg-[var(--bg-accent)]/10"
+					class="flex h-8 w-8 items-center justify-center text-[var(--text-muted)] transition-colors hover:text-[var(--accent)]"
 					onclick={() => (sidebarOpen = false)}
 				>
-					<X class="h-5 w-5" />
+					<X class="h-4 w-4" aria-hidden="true" />
 				</button>
 			</div>
 
 			<div class="flex-1 overflow-y-auto p-4">
 				{#if sidebarTab === 'settings'}
-					<h4 class="mb-3 text-xs font-black tracking-widest text-[var(--text-muted)] uppercase">
-						Modo de Leitura
-					</h4>
+					<p class="kicker mb-3">Modo de leitura</p>
 					<div class="flex flex-col gap-2">
 						{#each READING_MODES as mode (mode.value)}
 							<button
 								class={cn(
-									'rounded-xl border p-3 text-left font-bold transition-colors',
+									'border p-3 text-left text-sm font-bold transition-colors',
 									readingMode === mode.value
 										? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]'
-										: 'border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--text-muted)]'
+										: 'border-[var(--border)] hover:border-[var(--text-muted)]'
 								)}
 								onclick={() => preferences.setReadingMode(mode.value)}
 							>
@@ -643,27 +646,29 @@
 						{/each}
 					</div>
 				{:else if chapters.length === 0}
-					<p class="py-8 text-center text-sm text-[var(--text-muted)]">
-						Carregando lista de capítulos...
-					</p>
+					<p class="kicker py-8 text-center">Carregando lista de capítulos…</p>
 				{:else}
 					<div class="flex flex-col gap-1">
-						{#each chapters as chapter (chapter.source_id)}
+						{#each chapters as chapter, i (chapter.source_id)}
 							<button
 								class={cn(
-									'rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
+									'flex items-center gap-3 px-2 py-2.5 text-left text-sm transition-colors',
 									chapter.source_id === chapterId
 										? 'bg-[var(--accent)]/10 font-bold text-[var(--accent)]'
-										: 'hover:bg-[var(--bg-accent)]/10'
+										: 'hover:bg-[var(--bg-accent)]'
 								)}
 								onclick={() => goToChapter(chapter)}
 							>
-								<span class="flex items-center justify-between gap-2">
+								<span class="folio flex-shrink-0" style="font-size:1.125rem">
+									{String(i + 1).padStart(2, '0')}
+								</span>
+								<span class="flex min-w-0 flex-1 items-center justify-between gap-2">
 									<span class="truncate">
 										{chapter.chapter ? `Cap. ${chapter.chapter}` : (chapter.title ?? 'Capítulo')}
 									</span>
 									{#if mangaStore.isChapterRead(id, source, chapter.source_id)}
-										<span class="text-[10px] tracking-wider text-green-500 uppercase">lido</span>
+										<span class="text-[0.625rem] tracking-wider text-green-500 uppercase">lido</span
+										>
 									{/if}
 								</span>
 							</button>
@@ -673,16 +678,16 @@
 			</div>
 
 			<!-- Navegacao rapida entre capitulos -->
-			<div class="flex gap-2 border-t border-[var(--border)] p-4">
+			<div class="flex gap-2 border-t border-[var(--border)] p-3">
 				<button
-					class="flex-1 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-bold transition-colors hover:border-[var(--accent)] disabled:opacity-30"
+					class="btn-ghost flex-1 disabled:opacity-30"
 					onclick={() => goToChapter(prevChapter)}
 					disabled={!prevChapter}
 				>
 					Anterior
 				</button>
 				<button
-					class="flex-1 rounded-lg border border-[var(--border)] px-3 py-2 text-sm font-bold transition-colors hover:border-[var(--accent)] disabled:opacity-30"
+					class="btn-ghost flex-1 disabled:opacity-30"
 					onclick={() => goToChapter(nextChapter)}
 					disabled={!nextChapter}
 				>

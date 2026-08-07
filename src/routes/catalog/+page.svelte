@@ -6,8 +6,11 @@
 		type MangaSearchResult,
 		type SourceInfo
 	} from '$lib/services/api';
-	import { Search, Loader2, BookOpen } from 'lucide-svelte';
+	import { Search, Loader2, Compass, AlertTriangle } from 'lucide-svelte';
 	import { resolve } from '$app/paths';
+	import PageHeader from '$lib/components/PageHeader.svelte';
+	import VolumeCard from '$lib/components/VolumeCard.svelte';
+	import VolumeGridSkeleton from '$lib/components/VolumeGridSkeleton.svelte';
 
 	let query = $state('');
 	let results = $state<MangaSearchResult[]>([]);
@@ -18,14 +21,11 @@
 	let sources = $state<SourceInfo[]>([]);
 	let selectedSource = $state<string>('');
 
-	// Load sources on mount
+	// Carrega as fontes disponiveis assim que a tela monta.
 	$effect(() => {
 		BackendApiService.getSources()
 			.then((res) => {
 				sources = res;
-				if (res.length > 0 && !selectedSource) {
-					selectedSource = res[0].id;
-				}
 			})
 			.catch((err) => {
 				console.error(err);
@@ -57,95 +57,120 @@
 			isLoading = false;
 		}
 	}
+
+	function sourceName(id: string): string {
+		return sources.find((s) => s.id === id)?.name ?? id;
+	}
 </script>
 
-<main class="mx-auto max-w-7xl px-6 py-12 pb-24 text-[var(--text-primary)]">
-	<header class="mb-12">
-		<h1 class="font-display mb-2 text-4xl font-bold text-[var(--accent)] md:text-5xl">Catálogo</h1>
-		<p class="text-lg text-[var(--text-secondary)]">Busque mangás em fontes externas.</p>
-	</header>
+<main class="mx-auto max-w-[100rem] px-6 py-10 pb-28 md:px-10 md:py-14 xl:pb-14">
+	<PageHeader
+		kicker="Fontes externas · {sources.length || '—'} disponíve{sources.length === 1 ? 'l' : 'is'}"
+		title="Catálogo"
+		furigana="さがす"
+		lede="Busque um título nas fontes conectadas e adicione à sua estante em um toque."
+	>
+		{#snippet aside()}
+			<form onsubmit={performSearch} class="flex w-full items-end gap-4 lg:w-auto">
+				<div class="group relative flex-1 lg:w-72">
+					<label for="catalog-search" class="kicker mb-1.5 block">Buscar</label>
+					<div
+						class="flex items-center gap-2 border-b border-[var(--rule)] focus-within:border-[var(--accent)]"
+					>
+						<Search
+							class="h-4 w-4 flex-shrink-0 text-[var(--text-muted)] transition-colors group-focus-within:text-[var(--accent)]"
+							aria-hidden="true"
+						/>
+						<input
+							id="catalog-search"
+							type="search"
+							bind:value={query}
+							placeholder="Título…"
+							class="w-full border-0 bg-transparent py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
+						/>
+					</div>
+				</div>
 
-	<form onsubmit={performSearch} class="mb-12 flex flex-col items-center gap-4 md:flex-row">
-		<div class="group relative w-full flex-1">
-			<Search
-				class="absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-[var(--text-muted)] transition-colors group-focus-within:text-[var(--accent)]"
-			/>
-			<input
-				type="text"
-				bind:value={query}
-				placeholder="Buscar mangá..."
-				class="w-full rounded-xl border-2 border-[var(--border)] bg-[var(--bg-secondary)] py-3 pr-4 pl-12 text-lg transition-all focus:border-[var(--accent)] focus:outline-none"
-			/>
-		</div>
-		<select
-			bind:value={selectedSource}
-			class="h-full w-full rounded-xl border-2 border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3 text-lg focus:border-[var(--accent)] focus:outline-none md:w-48"
-		>
-			<option value="">Todas as fontes</option>
-			{#each sources as source (source.id)}
-				<option value={source.id}>{source.name}</option>
-			{/each}
-		</select>
-		<button type="submit" disabled={isLoading} class="btn-primary w-full py-3 md:w-auto">
-			{#if isLoading}
-				<Loader2 class="h-6 w-6 animate-spin" />
-			{:else}
-				Buscar
-			{/if}
-		</button>
-	</form>
+				<div class="w-36">
+					<label for="catalog-source" class="kicker mb-1.5 block">Fonte</label>
+					<select id="catalog-source" bind:value={selectedSource} class="select">
+						<option value="">Todas</option>
+						{#each sources as source (source.id)}
+							<option value={source.id}>{source.name}</option>
+						{/each}
+					</select>
+				</div>
+
+				<button type="submit" disabled={isLoading} class="btn-primary flex-shrink-0">
+					{#if isLoading}
+						<Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+					{:else}
+						<Search class="h-4 w-4" aria-hidden="true" />
+					{/if}
+					<span class="hidden sm:inline">Buscar</span>
+				</button>
+			</form>
+		{/snippet}
+	</PageHeader>
 
 	{#if error}
-		<div class="rounded-xl border border-red-500/50 bg-red-500/10 p-4 text-red-500">
-			{error}
+		<div
+			class="registration mb-10 flex items-start gap-3 border border-[var(--accent)]/40 bg-[var(--accent)]/5 px-5 py-4"
+		>
+			<AlertTriangle class="mt-0.5 h-4 w-4 flex-shrink-0 text-[var(--accent)]" aria-hidden="true" />
+			<p class="text-sm text-[var(--text-secondary)]">{error}</p>
 		</div>
 	{/if}
 
-	{#if results.length > 0}
-		<div class="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-			{#each results as result (result.source + result.source_id)}
-				<div class="group relative cursor-pointer">
-					<a href={resolve(`/manga/${result.source}/${result.source_id}`)}>
-						<div
-							class="card relative mb-3 aspect-[3/4] transition-transform duration-300 group-hover:-translate-y-2"
-						>
-							{#if result.cover_url}
-								<img
-									src={resolveImageUrl(result.cover_url)}
-									alt="Capa"
-									loading="lazy"
-									class="h-full w-full object-cover"
-								/>
-							{:else}
-								<div class="flex h-full w-full items-center justify-center">
-									<BookOpen class="h-8 w-8 text-[var(--text-muted)]" />
-								</div>
-							{/if}
-							<div
-								class="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/60 via-transparent to-transparent pb-4 opacity-0 transition-opacity group-hover:opacity-100"
-							>
-								<span
-									class="flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 py-1.5 text-[10px] font-black tracking-widest text-white uppercase"
-								>
-									<BookOpen class="h-3 w-3" /> VER DETALHES
-								</span>
-							</div>
-						</div>
-						<h4
-							class="font-body line-clamp-2 text-sm leading-snug font-medium transition-colors group-hover:text-[var(--accent)]"
-						>
-							{result.title}
-						</h4>
-						<p class="mt-0.5 text-[10px] text-[var(--text-muted)] uppercase">
-							{sources.find((s) => s.id === result.source)?.name || result.source}
-						</p>
-					</a>
-				</div>
-			{/each}
+	{#if isLoading}
+		<VolumeGridSkeleton count={10} />
+	{:else if results.length > 0}
+		<section aria-labelledby="resultados">
+			<div class="mb-5 flex items-baseline justify-between border-b border-[var(--border)] pb-3">
+				<h2 id="resultados" class="text-lg tracking-wide text-[var(--text-primary)] uppercase">
+					Resultados
+				</h2>
+				<span class="kicker tabular">
+					{results.length} título{results.length === 1 ? '' : 's'}
+				</span>
+			</div>
+
+			<div
+				class="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+			>
+				{#each results as result, i (result.source + result.source_id)}
+					<VolumeCard
+						href={resolve(`/manga/${result.source}/${result.source_id}`)}
+						title={result.title}
+						coverUrl={resolveImageUrl(result.cover_url)}
+						footnote={sourceName(result.source)}
+						action="Ver detalhes"
+						eager={i < 6}
+					/>
+				{/each}
+			</div>
+		</section>
+	{:else if hasSearched && !error}
+		<div class="registration halftone border border-[var(--rule)] px-6 py-20 text-center">
+			<p class="kicker mb-5">Sem correspondência</p>
+			<h2 class="masthead mx-auto max-w-xl text-balance text-[var(--text-primary)]">
+				Nada encontrado para "{query}"
+			</h2>
+			<p class="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-[var(--text-secondary)]">
+				Tente outro termo ou troque a fonte selecionada.
+			</p>
 		</div>
-	{:else if hasSearched && !isLoading && !error}
-		<div class="py-12 text-center text-[var(--text-muted)]">
-			Nenhum resultado encontrado para "{query}".
+	{:else}
+		<div
+			class="registration halftone border border-dashed border-[var(--rule)] px-6 py-20 text-center"
+		>
+			<Compass class="mx-auto mb-5 h-8 w-8 text-[var(--text-muted)]" aria-hidden="true" />
+			<h2 class="masthead mx-auto max-w-xl text-balance text-[var(--text-primary)]">
+				O que você quer ler hoje?
+			</h2>
+			<p class="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-[var(--text-secondary)]">
+				Digite um título acima para buscar nas fontes conectadas.
+			</p>
 		</div>
 	{/if}
 </main>
