@@ -21,6 +21,40 @@ let listener: PluginListenerHandle | null = null;
 let registering: Promise<void> | null = null;
 
 /**
+ * Chave sob a qual o roteador do SvelteKit grava o indice do historico.
+ * Vem de `@sveltejs/kit/src/runtime/client/constants.js` — nao e exportada
+ * publicamente, entao fica fixada aqui.
+ */
+const HISTORY_INDEX = 'sveltekit:history';
+
+/**
+ * Profundidade do historico desde que o app abriu.
+ *
+ * `history.length` nao serve: no WebView ele ja comeca em 1+ e nunca diminui ao
+ * voltar. Guardamos o indice do roteador na entrada inicial e medimos a
+ * diferenca — 0 significa "estamos na tela onde o app abriu".
+ */
+let baseIndex: number | null = null;
+
+function historyIndex(): number | null {
+	const state = history.state as Record<string, unknown> | null;
+	const value = state?.[HISTORY_INDEX];
+	return typeof value === 'number' ? value : null;
+}
+
+function getHistoryDepth(): number {
+	const current = historyIndex();
+	// Sem state do roteador: nao da para medir, entao nao arrisca fechar o app.
+	if (current === null) return 0;
+
+	// A base so fica disponivel depois que o roteador hidrata, o que pode ser
+	// depois do onMount do layout. Na primeira leitura valida, fixa aqui.
+	if (baseIndex === null) baseIndex = current;
+
+	return current - baseIndex;
+}
+
+/**
  * Registra um handler enquanto o componente estiver montado.
  * Devolve a funcao de limpeza para chamar no onDestroy.
  */
@@ -52,15 +86,24 @@ export async function initBackButton(): Promise<void> {
 	if (typeof window === 'undefined' || listener) return;
 	if (registering) return registering;
 
+	// Marca onde o app abriu, para saber ate onde o "voltar" pode recuar.
+	// Pode ser null aqui se o roteador ainda nao hidratou; nesse caso
+	// `getHistoryDepth` fixa a base na primeira leitura valida.
+	baseIndex = historyIndex();
+
 	registering = (async () => {
 		try {
-			listener = await App.addListener('backButton', ({ canGoBack }) => {
+			listener = await App.addListener('backButton', () => {
 				if (runHandlers()) return;
 
-				// Nenhum componente consumiu: volta no historico, e so fecha o app
-				// quando realmente nao ha para onde voltar.
-				if (canGoBack || window.history.length > 1) {
-					window.history.back();
+				// Nenhum componente consumiu: volta no historico do SvelteKit.
+				//
+				// `canGoBack` do Capacitor reflete o historico do WebView, que numa
+				// SPA nao acompanha a navegacao client-side — vinha sempre false e o
+				// app fechava de qualquer tela. O contador de entradas do proprio
+				// roteador e a fonte confiavel.
+				if (getHistoryDepth() > 0) {
+					history.back();
 				} else {
 					void App.exitApp();
 				}
@@ -80,4 +123,5 @@ export async function destroyBackButton(): Promise<void> {
 	await listener?.remove();
 	listener = null;
 	handlers.length = 0;
+	baseIndex = null;
 }

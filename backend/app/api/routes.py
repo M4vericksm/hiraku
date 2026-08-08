@@ -3,9 +3,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from app.core.http import IMAGE_TIMEOUT, get_client
-from app.domain.schemas import Chapter, ChapterPages, MangaSearchResult, SourceInfo
+from app.domain.schemas import Chapter, ChapterPages, GenreInfo, MangaSearchResult, SourceInfo
 from app.services.catalog import CatalogService, get_catalog_service
 from app.services.images import ImageProxyError, fetch_image
+from app.sources.genres import CANONICAL
 from app.sources.registry import UnknownSourceError
 
 router = APIRouter()
@@ -24,6 +25,16 @@ async def health() -> dict[str, str]:
 @router.get("/sources", response_model=list[SourceInfo])
 async def sources(service: CatalogService = Depends(get_catalog_service)) -> list[SourceInfo]:
     return service.sources()
+
+
+@router.get("/genres", response_model=list[GenreInfo])
+async def genres() -> list[GenreInfo]:
+    """Catalogo de generos conhecidos, para o frontend montar o filtro.
+
+    E a lista canonica inteira, nao so os generos presentes nos resultados: o
+    filtro precisa existir antes da primeira busca.
+    """
+    return [GenreInfo(slug=slug, label=label) for slug, label in CANONICAL.items()]
 
 
 @router.get("/manga/search", response_model=list[MangaSearchResult])

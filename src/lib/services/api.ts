@@ -30,9 +30,22 @@ export interface MangaSearchResult {
 	source_id: string;
 	source: string;
 	title: string;
+	alt_titles?: string[];
 	cover_url?: string;
 	description?: string;
+	/**
+	 * Slugs canonicos de genero (ver `backend/app/sources/genres.py`). Vem vazio
+	 * quando a fonte nao expoe genero naquele endpoint — a busca do MangaLivre,
+	 * por exemplo, so devolve titulo e capa.
+	 */
+	genres?: string[];
 	score: number;
+}
+
+/** Slug de genero com o rotulo em portugues que a UI mostra. */
+export interface GenreInfo {
+	slug: string;
+	label: string;
 }
 
 export interface Chapter {
@@ -204,6 +217,11 @@ export async function fetchImageBlob(url: string, signal?: AbortSignal): Promise
 export class BackendApiService {
 	static getSources(signal?: AbortSignal): Promise<SourceInfo[]> {
 		return request<SourceInfo[]>('/sources', { signal });
+	}
+
+	/** Catalogo de generos conhecidos, para o filtro do catalogo. */
+	static getGenres(signal?: AbortSignal): Promise<GenreInfo[]> {
+		return request<GenreInfo[]>('/genres', { signal });
 	}
 
 	static search(query: string, source?: string, signal?: AbortSignal): Promise<MangaSearchResult[]> {

@@ -23,7 +23,7 @@
 		WifiOff,
 		List
 	} from 'lucide-svelte';
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { cn } from '$lib/utils';
 
 	const source = $derived(page.params.source ?? '');
@@ -77,13 +77,30 @@
 		{ value: 'vertical', label: 'Scroll' }
 	];
 
-	/** Object URLs precisam ser revogados na troca de capitulo, senao vazam memoria. */
+	/**
+	 * Object URLs precisam ser revogados na troca de capitulo, senao vazam memoria.
+	 *
+	 * Le o estado com `untrack`: chamado de dentro do $effect de carga, uma
+	 * leitura rastreada de `pageUrls`/`isOfflineSource` vira dependencia do
+	 * proprio effect que as escreve — o effect reexecutava e revogava as blob
+	 * URLs que tinham acabado de ser criadas, e o capitulo baixado nao abria mais.
+	 */
 	function releasePages() {
-		if (isOfflineSource) offlineService.revokePages(pageUrls);
+		untrack(() => {
+			if (isOfflineSource) offlineService.revokePages(pageUrls);
+		});
 		pageUrls = [];
 	}
 
+	/**
+	 * Cada carga recebe um token; respostas de uma carga antiga sao descartadas.
+	 * Sem isso, trocar de capitulo rapido deixava as paginas do capitulo anterior
+	 * sobrescreverem as do atual.
+	 */
+	let loadToken = 0;
+
 	async function loadChapter(currentSource: string, mangaId: string, currentChapterId: string) {
+		const token = ++loadToken;
 		releasePages();
 		isLoading = true;
 		error = null;
@@ -96,30 +113,52 @@
 				currentChapterId
 			);
 
+			let urls: string[];
+			let offline: boolean;
+
 			if (downloaded) {
-				pageUrls = await offlineService.getOfflinePages(currentSource, mangaId, currentChapterId);
-				isOfflineSource = true;
+				urls = await offlineService.getOfflinePages(currentSource, mangaId, currentChapterId);
+				offline = true;
 			} else {
 				const res = await BackendApiService.getPages(currentSource, currentChapterId);
-				pageUrls = res.page_urls
+				urls = res.page_urls
 					.map((url) => resolveImageUrl(url))
 					.filter((url): url is string => !!url);
-				isOfflineSource = false;
+				offline = false;
 			}
 
-			if (pageUrls.length === 0) {
+			// Carga obsoleta: descarta e devolve os blobs que criamos por nada.
+			if (token !== loadToken) {
+				if (offline) offlineService.revokePages(urls);
+				return;
+			}
+
+			pageUrls = urls;
+			isOfflineSource = offline;
+
+			if (urls.length === 0) {
 				error = 'Este capítulo não tem páginas disponíveis nesta fonte.';
 				return;
 			}
 
-			mangaStore.updateProgress(mangaId, currentSource, 1, pageUrls.length, {
+			// Retoma na pagina salva quando o progresso e deste capitulo; senao
+			// abrir o capitulo de novo jogava a leitura de volta para a pagina 1.
+			const saved = untrack(() => mangaStore.find(mangaId, currentSource));
+			const resumePage =
+				saved?.lastChapterId === currentChapterId
+					? Math.min(Math.max(saved.lastReadPage || 1, 1), urls.length)
+					: 1;
+			currentPage = resumePage;
+
+			mangaStore.updateProgress(mangaId, currentSource, resumePage, urls.length, {
 				id: currentChapterId
 			});
 		} catch (err) {
+			if (token !== loadToken) return;
 			console.error(err);
 			error = err instanceof ApiError ? err.message : 'Falha ao carregar as páginas do capítulo.';
 		} finally {
-			isLoading = false;
+			if (token === loadToken) isLoading = false;
 		}
 	}
 
@@ -335,17 +374,52 @@
 	function handleVerticalScroll(e: Event) {
 		if (pageUrls.length === 0) return;
 		const target = e.target as HTMLElement;
-		const images = target.querySelectorAll('img');
+		// `[data-page]` e nao `img`: paginas faltando num capitulo parcial viram
+		// placeholder e o indice do `img` deixaria de bater com o numero da pagina.
+		const slots = target.querySelectorAll<HTMLElement>('[data-page]');
 		const middle = window.innerHeight / 2;
 
-		for (let i = 0; i < images.length; i++) {
-			const rect = images[i].getBoundingClientRect();
+		for (const slot of slots) {
+			const rect = slot.getBoundingClientRect();
 			if (rect.top <= middle && rect.bottom >= middle) {
-				if (currentPage !== i + 1) setPage(i + 1);
+				const value = Number(slot.dataset.page);
+				if (value && currentPage !== value) setPage(value);
 				break;
 			}
 		}
 	}
+
+	/**
+	 * Retoma a leitura onde parou, no modo scroll.
+	 *
+	 * So dispara uma vez por capitulo (`restoredFor`): depois disso quem manda na
+	 * posicao e o usuario, e rolar de volta ao ponto salvo a cada re-render
+	 * prenderia a tela.
+	 */
+	let restoredFor = $state<string | null>(null);
+
+	$effect(() => {
+		const container = verticalContainer;
+		const total = pageUrls.length;
+		const currentChapterId = chapterId;
+
+		if (readingMode !== 'vertical' || !container || total === 0) return;
+		if (restoredFor === currentChapterId) return;
+
+		restoredFor = currentChapterId;
+
+		// So retoma se o progresso salvo for deste capitulo.
+		const saved = untrack(() => manga);
+		if (saved?.lastChapterId !== currentChapterId) return;
+		const targetPage = saved.lastReadPage;
+		if (!targetPage || targetPage <= 1) return;
+
+		// Espera o layout assentar antes de medir a posicao do alvo.
+		requestAnimationFrame(() => {
+			const slot = container.querySelector<HTMLElement>(`[data-page="${targetPage}"]`);
+			slot?.scrollIntoView({ block: 'start' });
+		});
+	});
 </script>
 
 <svelte:window onkeydown={handleKeyDown} onmousemove={handleMouseMove} />
@@ -384,12 +458,20 @@
 					<ArrowLeft class="h-6 w-6" />
 				</a>
 				<div class="min-w-0">
-					<h1 class="line-clamp-1 font-bold">
-						{manga?.title ?? 'Leitura'}
-						{#if chapterLabel}
-							<span class="opacity-70">— {chapterLabel}</span>
-						{/if}
-					</h1>
+					<!-- Titulo tambem leva ao manga: no celular o alvo de toque da seta
+					     e pequeno, e é o gesto que o usuario tenta primeiro. -->
+					<a
+						href={resolve(`/manga/${source}/${id}`)}
+						class="block transition-opacity hover:opacity-80"
+						onclick={(e) => e.stopPropagation()}
+					>
+						<h1 class="line-clamp-1 font-bold">
+							{manga?.title ?? 'Leitura'}
+							{#if chapterLabel}
+								<span class="opacity-70">— {chapterLabel}</span>
+							{/if}
+						</h1>
+					</a>
 					<p class="flex items-center gap-2 text-xs opacity-80">
 						Página {currentPage} / {pageUrls.length}
 						{#if isOfflineSource}
@@ -481,15 +563,26 @@
 					onscroll={handleVerticalScroll}
 				>
 					<div class="mx-auto flex w-full flex-col items-center pb-24 md:max-w-[720px]">
-						{#each pageUrls as url, i (url)}
-							<img
-								data-page={i + 1}
-								src={url}
-								alt={`Página ${i + 1}`}
-								class="h-auto w-full origin-top"
-								style="width: {zoomLevel * 100}%;"
-								loading={i < 3 ? 'eager' : 'lazy'}
-							/>
+						<!-- Chave pelo indice: em capitulo parcial as paginas que faltam sao
+						     string vazia, e uma chave duplicada derruba o each. -->
+						{#each pageUrls as url, i (i)}
+							{#if url}
+								<img
+									data-page={i + 1}
+									src={url}
+									alt={`Página ${i + 1}`}
+									class="h-auto w-full origin-top"
+									style="width: {zoomLevel * 100}%;"
+									loading={i < 3 ? 'eager' : 'lazy'}
+								/>
+							{:else}
+								<div
+									data-page={i + 1}
+									class="flex aspect-[2/3] w-full items-center justify-center text-sm text-[var(--text-muted)]"
+								>
+									Página {i + 1} indisponível
+								</div>
+							{/if}
 						{/each}
 
 						<!-- Fim do capitulo: continuar sem voltar para a lista -->

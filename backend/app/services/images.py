@@ -14,16 +14,35 @@ ALLOWED_HOSTS = {
     "uploads.mangadex.org",
     "mangalivre.to",
     "www.mangalivre.to",
+    "leitor.kamisama.com.br",
+    "montetaiscanlator.xyz",
+    "ninjacomics.xyz",
+    "toonlivre.com",         # <--- Adicionado
+    "www.toonlivre.com",     # <--- Adicionado
+    "toonlivre.to",
 }
 
 ALLOWED_HOST_SUFFIXES = (
     ".mangadex.network",
     ".mangadex.org",
     ".mangalivre.to",
+    # Os sites Madara servem parte das paginas por uma CDN em subdominio
+    # (ex.: cdn.montetaiscanlator.xyz), entao o sufixo tem que entrar junto.
+    ".kamisama.com.br",
+    ".montetaiscanlator.xyz",
+    ".ninjacomics.xyz",
+    ".toonlivre.com",        # <--- Adicionado
+    ".toonlivre.to",
 )
 
+# Sites Madara checam Referer nas imagens de capitulo; sem ele vem 403.
 REFERERS = {
     "mangalivre.to": "https://mangalivre.to/",
+    "kamisama.com.br": "https://leitor.kamisama.com.br/",
+    "montetaiscanlator.xyz": "https://montetaiscanlator.xyz/",
+    "ninjacomics.xyz": "https://ninjacomics.xyz/",
+    "toonlivre.com": "https://toonlivre.com/", # <--- Adicionado
+    "toonlivre.to": "https://toonlivre.to/",
 }
 
 BROWSER_USER_AGENT = (

@@ -9,6 +9,13 @@ class SourceInfo(BaseModel):
     risk: str = "medium"
 
 
+class GenreInfo(BaseModel):
+    """Genero canonic com o rotulo em portugues que o frontend exibe."""
+
+    slug: str
+    label: str
+
+
 class MangaSearchResult(BaseModel):
     source: str
     source_id: str
