@@ -3,11 +3,14 @@
 		ApiError,
 		BackendApiService,
 		resolveImageUrl,
+		type GenreInfo,
 		type MangaSearchResult,
 		type SourceInfo
 	} from '$lib/services/api';
-	import { Search, Loader2, BookOpen } from 'lucide-svelte';
+	import { Search, Loader2, BookOpen, X } from 'lucide-svelte';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import { onMount } from 'svelte';
 
 	let query = $state('');
 	let results = $state<MangaSearchResult[]>([]);
@@ -16,16 +19,21 @@
 	let hasSearched = $state(false);
 
 	let sources = $state<SourceInfo[]>([]);
+	// String vazia = "Todas as fontes". E o padrao: nunca pre-seleciona uma fonte
+	// especifica, senao o usuario perde resultados das outras sem perceber.
 	let selectedSource = $state<string>('');
 
-	// Load sources on mount
-	$effect(() => {
+	let genres = $state<GenreInfo[]>([]);
+	// Slugs marcados no filtro. Um resultado precisa ter TODOS eles.
+	let selectedGenres = $state<string[]>([]);
+	let genreMenuOpen = $state(false);
+
+	// Uma vez na montagem — em $effect isso reagiria a `sources`/`selectedSource`
+	// e refazia a chamada em loop.
+	onMount(() => {
 		BackendApiService.getSources()
 			.then((res) => {
 				sources = res;
-				if (res.length > 0 && !selectedSource) {
-					selectedSource = res[0].id;
-				}
 			})
 			.catch((err) => {
 				console.error(err);
@@ -34,7 +42,44 @@
 						? err.message
 						: 'Falha ao carregar as fontes. O backend está rodando?';
 			});
+
+		BackendApiService.getGenres()
+			.then((res) => {
+				genres = res;
+			})
+			// Sem a lista o filtro some, mas a busca continua funcionando.
+			.catch((err) => console.error('Falha ao carregar gêneros', err));
+
+		// Chegou de um chip de genero na pagina do manga.
+		const fromUrl = page.url.searchParams.get('genre');
+		if (fromUrl) selectedGenres = [fromUrl];
 	});
+
+	const genreLabels = $derived(Object.fromEntries(genres.map((g) => [g.slug, g.label])));
+
+	function toggleGenre(slug: string) {
+		selectedGenres = selectedGenres.includes(slug)
+			? selectedGenres.filter((s) => s !== slug)
+			: [...selectedGenres, slug];
+	}
+
+	/**
+	 * Filtro aplicado no cliente sobre o que a busca devolveu.
+	 *
+	 * As fontes nao aceitam filtro de genero na query de busca, e varias nem
+	 * mandam genero no resultado — por isso o filtro so esconde quem declara
+	 * generos e nao bate. Um resultado sem genero nenhum continua visivel, senao
+	 * o MangaLivre (que so devolve titulo e capa na busca) sumiria inteiro.
+	 */
+	const visibleResults = $derived(
+		selectedGenres.length === 0
+			? results
+			: results.filter((r) => {
+					const own = r.genres ?? [];
+					if (own.length === 0) return true;
+					return selectedGenres.every((slug) => own.includes(slug));
+				})
+	);
 
 	async function performSearch(e: Event) {
 		e.preventDefault();
@@ -95,15 +140,73 @@
 		</button>
 	</form>
 
+	<!-- Filtro de categorias -->
+	{#if genres.length > 0}
+		<div class="mb-8">
+			<div class="mb-3 flex flex-wrap items-center gap-3">
+				<button
+					type="button"
+					onclick={() => (genreMenuOpen = !genreMenuOpen)}
+					class="rounded-xl border-2 border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-2 text-sm font-bold transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+				>
+					Categorias{selectedGenres.length > 0 ? ` (${selectedGenres.length})` : ''}
+				</button>
+
+				{#each selectedGenres as slug (slug)}
+					<button
+						type="button"
+						onclick={() => toggleGenre(slug)}
+						class="flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-bold text-[var(--accent-foreground)]"
+						title="Remover filtro"
+					>
+						{genreLabels[slug] ?? slug}
+						<X class="h-3 w-3" />
+					</button>
+				{/each}
+
+				{#if selectedGenres.length > 0}
+					<button
+						type="button"
+						onclick={() => (selectedGenres = [])}
+						class="text-xs font-bold text-[var(--text-muted)] underline transition-colors hover:text-[var(--accent)]"
+					>
+						Limpar
+					</button>
+				{/if}
+			</div>
+
+			{#if genreMenuOpen}
+				<div
+					class="flex flex-wrap gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4"
+				>
+					{#each genres as genre (genre.slug)}
+						<button
+							type="button"
+							onclick={() => toggleGenre(genre.slug)}
+							class={[
+								'rounded-full border px-3 py-1.5 text-xs font-bold transition-colors',
+								selectedGenres.includes(genre.slug)
+									? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]'
+									: 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
+							].join(' ')}
+						>
+							{genre.label}
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	{/if}
+
 	{#if error}
 		<div class="rounded-xl border border-red-500/50 bg-red-500/10 p-4 text-red-500">
 			{error}
 		</div>
 	{/if}
 
-	{#if results.length > 0}
+	{#if visibleResults.length > 0}
 		<div class="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-			{#each results as result (result.source + result.source_id)}
+			{#each visibleResults as result (result.source + result.source_id)}
 				<div class="group relative cursor-pointer">
 					<a href={resolve(`/manga/${result.source}/${result.source_id}`)}>
 						<div
@@ -142,6 +245,10 @@
 					</a>
 				</div>
 			{/each}
+		</div>
+	{:else if results.length > 0 && !isLoading}
+		<div class="py-12 text-center text-[var(--text-muted)]">
+			Nenhum resultado com as categorias selecionadas.
 		</div>
 	{:else if hasSearched && !isLoading && !error}
 		<div class="py-12 text-center text-[var(--text-muted)]">

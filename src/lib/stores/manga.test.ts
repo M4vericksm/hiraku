@@ -38,8 +38,10 @@ describe('MangaStore.addManga', () => {
 	it('persists library to localStorage', () => {
 		const manga = makeManga({ title: 'Naruto' });
 		mangaStore.addManga(manga);
-		const stored = JSON.parse(localStorage.getItem('hiraku-library') ?? '[]') as Manga[];
-		expect(stored.some((m) => m.title === 'Naruto')).toBe(true);
+		const stored = JSON.parse(localStorage.getItem('hiraku-library') ?? '{}') as {
+			library: Manga[];
+		};
+		expect(stored.library.some((m) => m.title === 'Naruto')).toBe(true);
 	});
 });
 
@@ -208,5 +210,269 @@ describe('MangaStore.clearAll', () => {
 		mangaStore.addManga(makeManga());
 		mangaStore.clearAll();
 		expect(localStorage.getItem('hiraku-library')).toBeNull();
+	});
+
+	it('empties the folders too', () => {
+		mangaStore.createFolder('Terror');
+		mangaStore.clearAll();
+		expect(mangaStore.folders).toHaveLength(0);
+	});
+});
+
+describe('MangaStore folder CRUD', () => {
+	it('creates a folder with an id and a name', () => {
+		const folder = mangaStore.createFolder('Lendo');
+		expect(folder).not.toBeNull();
+		expect(folder!.name).toBe('Lendo');
+		expect(folder!.id).toBeTruthy();
+		expect(mangaStore.folders).toHaveLength(1);
+	});
+
+	it('trims and collapses whitespace in the name', () => {
+		const folder = mangaStore.createFolder('  Terror   psicológico  ');
+		expect(folder!.name).toBe('Terror psicológico');
+	});
+
+	it('refuses empty or whitespace-only names', () => {
+		expect(mangaStore.createFolder('')).toBeNull();
+		expect(mangaStore.createFolder('   ')).toBeNull();
+		expect(mangaStore.folders).toHaveLength(0);
+	});
+
+	it('reuses an existing folder instead of creating a case-insensitive duplicate', () => {
+		const first = mangaStore.createFolder('Favoritos');
+		const second = mangaStore.createFolder('favoritos');
+		expect(second!.id).toBe(first!.id);
+		expect(mangaStore.folders).toHaveLength(1);
+	});
+
+	it('renames a folder', () => {
+		const folder = mangaStore.createFolder('Antigo')!;
+		expect(mangaStore.renameFolder(folder.id, 'Novo')).toBe(true);
+		expect(mangaStore.findFolder(folder.id)?.name).toBe('Novo');
+	});
+
+	it('refuses to rename to a name already taken by another folder', () => {
+		const a = mangaStore.createFolder('A')!;
+		mangaStore.createFolder('B');
+		expect(mangaStore.renameFolder(a.id, 'b')).toBe(false);
+		expect(mangaStore.findFolder(a.id)?.name).toBe('A');
+	});
+
+	it('allows renaming a folder to its own name', () => {
+		const folder = mangaStore.createFolder('Mesmo')!;
+		expect(mangaStore.renameFolder(folder.id, 'Mesmo')).toBe(true);
+	});
+
+	it('refuses to rename an unknown folder or use an empty name', () => {
+		const folder = mangaStore.createFolder('X')!;
+		expect(mangaStore.renameFolder('ghost', 'Y')).toBe(false);
+		expect(mangaStore.renameFolder(folder.id, '  ')).toBe(false);
+	});
+
+	it('persists folders to localStorage', () => {
+		mangaStore.createFolder('Salvo');
+		const stored = JSON.parse(localStorage.getItem('hiraku-library') ?? '{}');
+		expect(stored.folders).toHaveLength(1);
+		expect(stored.folders[0].name).toBe('Salvo');
+	});
+});
+
+describe('MangaStore folder assignment', () => {
+	it('assigns a manga to a folder', () => {
+		mangaStore.addManga(makeManga({ id: 'm1', source: 'src' }));
+		const folder = mangaStore.createFolder('Lendo')!;
+		mangaStore.addMangaToFolder('m1', 'src', folder.id);
+		expect(mangaStore.isMangaInFolder('m1', 'src', folder.id)).toBe(true);
+		expect(mangaStore.mangasInFolder(folder.id)).toHaveLength(1);
+	});
+
+	it('lets a manga belong to several folders at once', () => {
+		mangaStore.addManga(makeManga({ id: 'm1', source: 'src' }));
+		const a = mangaStore.createFolder('Lendo')!;
+		const b = mangaStore.createFolder('Favoritos')!;
+		mangaStore.addMangaToFolder('m1', 'src', a.id);
+		mangaStore.addMangaToFolder('m1', 'src', b.id);
+		expect(mangaStore.find('m1', 'src')?.folderIds).toEqual([a.id, b.id]);
+		expect(mangaStore.foldersOf('m1', 'src').map((f) => f.name)).toEqual(['Lendo', 'Favoritos']);
+	});
+
+	it('is idempotent when assigning twice', () => {
+		mangaStore.addManga(makeManga({ id: 'm1', source: 'src' }));
+		const folder = mangaStore.createFolder('Lendo')!;
+		mangaStore.addMangaToFolder('m1', 'src', folder.id);
+		mangaStore.addMangaToFolder('m1', 'src', folder.id);
+		expect(mangaStore.find('m1', 'src')?.folderIds).toEqual([folder.id]);
+	});
+
+	it('removes a manga from a folder without removing it from the library', () => {
+		mangaStore.addManga(makeManga({ id: 'm1', source: 'src' }));
+		const folder = mangaStore.createFolder('Lendo')!;
+		mangaStore.addMangaToFolder('m1', 'src', folder.id);
+		mangaStore.removeMangaFromFolder('m1', 'src', folder.id);
+		expect(mangaStore.isMangaInFolder('m1', 'src', folder.id)).toBe(false);
+		expect(mangaStore.library).toHaveLength(1);
+	});
+
+	it('toggles membership', () => {
+		mangaStore.addManga(makeManga({ id: 'm1', source: 'src' }));
+		const folder = mangaStore.createFolder('Lendo')!;
+		mangaStore.toggleMangaFolder('m1', 'src', folder.id);
+		expect(mangaStore.isMangaInFolder('m1', 'src', folder.id)).toBe(true);
+		mangaStore.toggleMangaFolder('m1', 'src', folder.id);
+		expect(mangaStore.isMangaInFolder('m1', 'src', folder.id)).toBe(false);
+	});
+
+	it('ignores unknown mangas and unknown folders', () => {
+		mangaStore.addManga(makeManga({ id: 'm1', source: 'src' }));
+		const folder = mangaStore.createFolder('Lendo')!;
+		expect(() => mangaStore.addMangaToFolder('ghost', 'src', folder.id)).not.toThrow();
+		mangaStore.addMangaToFolder('m1', 'src', 'no-such-folder');
+		expect(mangaStore.find('m1', 'src')?.folderIds).toEqual([]);
+		expect(() => mangaStore.removeMangaFromFolder('ghost', 'src', folder.id)).not.toThrow();
+	});
+
+	it('counts only mangas inside the folder', () => {
+		mangaStore.addManga(makeManga({ id: 'in', source: 'src' }));
+		mangaStore.addManga(makeManga({ id: 'out', source: 'src' }));
+		const folder = mangaStore.createFolder('Lendo')!;
+		mangaStore.addMangaToFolder('in', 'src', folder.id);
+		expect(mangaStore.folderCount(folder.id)).toBe(1);
+		expect(mangaStore.mangasInFolder(folder.id)[0].id).toBe('in');
+	});
+
+	it('keeps folder membership when the manga is re-added from the catalog', () => {
+		mangaStore.addManga(makeManga({ id: 'm1', source: 'src', title: 'Antigo' }));
+		const folder = mangaStore.createFolder('Lendo')!;
+		mangaStore.addMangaToFolder('m1', 'src', folder.id);
+		mangaStore.addManga(makeManga({ id: 'm1', source: 'src', title: 'Atualizado' }));
+		expect(mangaStore.find('m1', 'src')?.title).toBe('Atualizado');
+		expect(mangaStore.isMangaInFolder('m1', 'src', folder.id)).toBe(true);
+	});
+
+	it('drops folder membership when the manga leaves the library', () => {
+		mangaStore.addManga(makeManga({ id: 'm1', source: 'src' }));
+		const folder = mangaStore.createFolder('Lendo')!;
+		mangaStore.addMangaToFolder('m1', 'src', folder.id);
+		mangaStore.removeManga('m1', 'src');
+		expect(mangaStore.mangasInFolder(folder.id)).toHaveLength(0);
+	});
+});
+
+describe('MangaStore.deleteFolder', () => {
+	it('deletes the folder but keeps its mangas in the library', () => {
+		mangaStore.addManga(makeManga({ id: 'm1', source: 'src', title: 'Berserk' }));
+		const folder = mangaStore.createFolder('Terror')!;
+		mangaStore.addMangaToFolder('m1', 'src', folder.id);
+
+		mangaStore.deleteFolder(folder.id);
+
+		expect(mangaStore.folders).toHaveLength(0);
+		expect(mangaStore.library).toHaveLength(1);
+		expect(mangaStore.find('m1', 'src')?.title).toBe('Berserk');
+		expect(mangaStore.find('m1', 'src')?.folderIds).toEqual([]);
+	});
+
+	it('does not touch membership of other folders', () => {
+		mangaStore.addManga(makeManga({ id: 'm1', source: 'src' }));
+		const a = mangaStore.createFolder('A')!;
+		const b = mangaStore.createFolder('B')!;
+		mangaStore.addMangaToFolder('m1', 'src', a.id);
+		mangaStore.addMangaToFolder('m1', 'src', b.id);
+
+		mangaStore.deleteFolder(a.id);
+
+		expect(mangaStore.find('m1', 'src')?.folderIds).toEqual([b.id]);
+		expect(mangaStore.folders.map((f) => f.id)).toEqual([b.id]);
+	});
+
+	it('is safe for unknown folder ids', () => {
+		expect(() => mangaStore.deleteFolder('ghost')).not.toThrow();
+	});
+});
+
+describe('MangaStore storage migration', () => {
+	/** Simula abrir o app com um localStorage ja gravado. */
+	function loadFrom(raw: string) {
+		localStorage.setItem('hiraku-library', raw);
+		mangaStore.loadFromStorage();
+	}
+
+	it('reads a v1 library (bare array, no folders)', () => {
+		loadFrom(JSON.stringify([makeManga({ id: 'old', source: 'src', title: 'Legado' })]));
+		expect(mangaStore.library).toHaveLength(1);
+		expect(mangaStore.library[0].title).toBe('Legado');
+		expect(mangaStore.folders).toEqual([]);
+	});
+
+	it('gives v1 mangas an empty folderIds instead of undefined', () => {
+		loadFrom(JSON.stringify([makeManga({ id: 'old', source: 'src' })]));
+		expect(mangaStore.library[0].folderIds).toEqual([]);
+	});
+
+	it('upgrades a v1 library to the new envelope on the next write', () => {
+		loadFrom(JSON.stringify([makeManga({ id: 'old', source: 'src' })]));
+		mangaStore.createFolder('Nova');
+		const stored = JSON.parse(localStorage.getItem('hiraku-library') ?? '{}');
+		expect(stored.version).toBe(2);
+		expect(stored.library).toHaveLength(1);
+		expect(stored.folders).toHaveLength(1);
+	});
+
+	it('round-trips the v2 envelope with folders and membership', () => {
+		mangaStore.addManga(makeManga({ id: 'm1', source: 'src', title: 'Round' }));
+		const folder = mangaStore.createFolder('Terror')!;
+		mangaStore.addMangaToFolder('m1', 'src', folder.id);
+
+		// Reler o que acabou de ser gravado prova que o envelope sobrevive ao ciclo.
+		mangaStore.loadFromStorage();
+		expect(mangaStore.folders.map((f) => f.name)).toEqual(['Terror']);
+		expect(mangaStore.isMangaInFolder('m1', 'src', folder.id)).toBe(true);
+		expect(mangaStore.find('m1', 'src')?.title).toBe('Round');
+	});
+
+	it('survives corrupted JSON without throwing', () => {
+		expect(() => loadFrom('{ not json at all')).not.toThrow();
+		expect(mangaStore.library).toEqual([]);
+		expect(mangaStore.folders).toEqual([]);
+	});
+
+	it('survives an envelope with wrong-typed fields', () => {
+		loadFrom(JSON.stringify({ version: 2, library: 'nope', folders: 42 }));
+		expect(mangaStore.library).toEqual([]);
+		expect(mangaStore.folders).toEqual([]);
+	});
+
+	it('discards folder entries missing id or name', () => {
+		loadFrom(
+			JSON.stringify({
+				version: 2,
+				library: [],
+				folders: [{ id: 'ok', name: 'Boa', createdAt: 'x' }, { name: 'sem id' }, null, 'texto']
+			})
+		);
+		expect(mangaStore.folders.map((f) => f.id)).toEqual(['ok']);
+	});
+
+	it('drops folderIds pointing at folders that no longer exist', () => {
+		loadFrom(
+			JSON.stringify({
+				version: 2,
+				library: [makeManga({ id: 'm1', source: 'src', folderIds: ['viva', 'morta'] })],
+				folders: [{ id: 'viva', name: 'Viva', createdAt: 'x' }]
+			})
+		);
+		expect(mangaStore.library[0].folderIds).toEqual(['viva']);
+	});
+
+	it('drops malformed manga entries but keeps the valid ones', () => {
+		loadFrom(
+			JSON.stringify({
+				version: 2,
+				library: [makeManga({ id: 'good', source: 'src' }), null, { source: 'src' }, 7],
+				folders: []
+			})
+		);
+		expect(mangaStore.library.map((m) => m.id)).toEqual(['good']);
 	});
 });

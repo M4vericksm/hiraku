@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { onMount, untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { mangaStore, type Manga } from '$lib/stores/manga.svelte';
 	import {
@@ -7,6 +8,7 @@
 		BackendApiService,
 		resolveImageUrl,
 		type Chapter,
+		type GenreInfo,
 		type MangaSearchResult
 	} from '$lib/services/api';
 	import { offlineService } from '$lib/services/offline';
@@ -37,6 +39,19 @@
 	const displayTitle = $derived(detail?.title || libraryManga?.title || 'Manga');
 	const displayCover = $derived(resolveImageUrl(detail?.cover_url) || libraryManga?.coverUrl);
 	const displayDescription = $derived(detail?.description ?? libraryManga?.description);
+
+	// Generos vem como slug canonic; o rotulo em portugues vem de /genres.
+	let genreLabels = $state<Record<string, string>>({});
+	const displayGenres = $derived(detail?.genres ?? libraryManga?.genres ?? []);
+
+	onMount(() => {
+		BackendApiService.getGenres()
+			.then((list: GenreInfo[]) => {
+				genreLabels = Object.fromEntries(list.map((g) => [g.slug, g.label]));
+			})
+			// Filtro de genero e enfeite: sem os rotulos mostramos o slug.
+			.catch((err) => console.error('Falha ao carregar rótulos de gênero', err));
+	});
 
 	// Capitulo por onde retomar a leitura.
 	const resumeChapter = $derived(
@@ -79,6 +94,9 @@
 				title: displayTitle,
 				coverUrl: displayCover,
 				description: displayDescription,
+				// Guardados junto: a biblioteca funciona offline e nao pode depender
+				// de uma nova chamada de detalhe para filtrar por genero.
+				genres: displayGenres,
 				progress: 0,
 				lastReadPage: 0,
 				totalPage: 0,
@@ -94,24 +112,33 @@
 	let downloadProgress = $state<Record<string, number>>({});
 	let downloadError = $state<string | null>(null);
 
-	// Check download status when chapters load
+	// Status offline dos capitulos, recarregado quando a lista muda.
+	//
+	// O corpo escreve em `downloadedMap`/`downloadProgress`, entao a leitura
+	// desses mapas vai dentro de `untrack`: rastreada, cada escrita re-disparava
+	// o effect, que relia o IndexedDB e sobrescrevia o progresso de um download
+	// em andamento — era o que travava a barra no primeiro capitulo.
 	$effect(() => {
 		const currentSource = source;
 		const mangaId = id;
-		for (const chapter of chapters) {
+		const list = chapters;
+
+		for (const chapter of list) {
 			offlineService.getChapterStatus(currentSource, mangaId, chapter.source_id).then((meta) => {
-				// Não sobrescreve um download em andamento.
-				if (downloadedMap[chapter.source_id] === 'downloading') return;
-				downloadedMap[chapter.source_id] = !meta
-					? 'not_downloaded'
-					: meta.status === 'partial'
-						? 'partial'
-						: 'downloaded';
-				if (meta?.status === 'partial' && meta.totalPages > 0) {
-					downloadProgress[chapter.source_id] = Math.round(
-						(meta.pageCount / meta.totalPages) * 100
-					);
-				}
+				untrack(() => {
+					// Não sobrescreve um download em andamento.
+					if (downloadedMap[chapter.source_id] === 'downloading') return;
+					downloadedMap[chapter.source_id] = !meta
+						? 'not_downloaded'
+						: meta.status === 'partial'
+							? 'partial'
+							: 'downloaded';
+					if (meta?.status === 'partial' && meta.totalPages > 0) {
+						downloadProgress[chapter.source_id] = Math.round(
+							(meta.pageCount / meta.totalPages) * 100
+						);
+					}
+				});
 			});
 		}
 	});
@@ -132,13 +159,14 @@
 			return;
 		}
 
-		if (downloadedMap[cid] !== 'not_downloaded') return;
+		// Parcial tambem entra: baixar de novo retoma as paginas que faltam.
+		if (downloadedMap[cid] === 'downloading') return;
 
 		downloadedMap[cid] = 'downloading';
 		downloadProgress[cid] = 0;
 		downloadError = null;
 		try {
-			await offlineService.downloadChapter(
+			const status = await offlineService.downloadChapter(
 				source,
 				id,
 				cid,
@@ -147,7 +175,10 @@
 					downloadProgress[cid] = progress;
 				}
 			);
-			downloadedMap[cid] = 'downloaded';
+			downloadedMap[cid] = status === 'partial' ? 'partial' : 'downloaded';
+			if (status === 'partial') {
+				downloadError = 'Algumas páginas falharam. Toque em baixar de novo para completar.';
+			}
 		} catch (err) {
 			console.error('Falha ao baixar capítulo', err);
 			downloadedMap[cid] = 'not_downloaded';
@@ -227,6 +258,20 @@
 	</div>
 
 	<div class="mx-auto max-w-7xl px-6 pt-16">
+		<!-- Generos -->
+		{#if displayGenres.length > 0}
+			<div class="mb-6 flex flex-wrap gap-2">
+				{#each displayGenres as slug (slug)}
+					<a
+						href={resolve(`/catalog?genre=${slug}`)}
+						class="rounded-full border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-1.5 text-xs font-bold text-[var(--text-secondary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+					>
+						{genreLabels[slug] ?? slug}
+					</a>
+				{/each}
+			</div>
+		{/if}
+
 		<!-- Description -->
 		{#if displayDescription}
 			<div class="mb-8 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-6">
@@ -332,6 +377,15 @@
 								<RefreshCw class="h-4 w-4 animate-spin" />
 								<span>{downloadProgress[chapter.source_id] || 0}%</span>
 							</div>
+						{:else if downloadedMap[chapter.source_id] === 'partial'}
+							<button
+								onclick={(e) => handleDownload(chapter, e)}
+								class="flex min-w-[53px] cursor-pointer flex-col items-center justify-center gap-1 border-l border-[var(--border)] p-4 text-[9px] font-bold text-amber-500 transition-colors group-hover:border-[var(--accent)]/40 hover:text-[var(--accent)]"
+								title="Download incompleto. Clique para retomar."
+							>
+								<Download class="h-4 w-4" />
+								<span>{downloadProgress[chapter.source_id] || 0}%</span>
+							</button>
 						{:else}
 							<button
 								onclick={(e) => handleDownload(chapter, e)}
