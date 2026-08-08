@@ -27,3 +27,6 @@ __pycache__/
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Banco local gerado ao rodar o backend
+hiraku.db

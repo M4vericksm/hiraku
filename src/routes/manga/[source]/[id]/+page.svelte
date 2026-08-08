@@ -20,7 +20,8 @@
 		BookmarkMinus,
 		Download,
 		Check,
-		RefreshCw
+		RefreshCw,
+		AlertTriangle
 	} from 'lucide-svelte';
 
 	const source = $derived(page.params.source ?? '');
@@ -188,83 +189,74 @@
 	}
 </script>
 
-<main class="font-body min-h-screen pb-24 text-[var(--text-primary)]">
-	<!-- Hero Section -->
-	<div class="relative h-[350px] overflow-hidden">
+<main class="pb-28 text-[var(--text-primary)] xl:pb-14">
+	<!-- Capa como pano de fundo: mesma referencia de "arte encoberta pela lombada" do volume. -->
+	<div class="halftone relative overflow-hidden border-b border-[var(--border)]">
 		{#if displayCover}
 			<div
-				class="absolute inset-0 scale-110 bg-cover bg-center opacity-15 blur-3xl"
+				class="absolute inset-0 scale-110 bg-cover bg-center opacity-20 blur-2xl"
 				style="background-image: url({displayCover})"
 			></div>
 		{/if}
 		<div
-			class="absolute inset-0 bg-gradient-to-t from-[var(--bg-primary)] via-[var(--bg-primary)]/80 to-transparent"
+			class="absolute inset-0 bg-gradient-to-t from-[var(--bg-primary)] via-[var(--bg-primary)]/85 to-[var(--bg-primary)]/40"
 		></div>
 
-		<div class="relative mx-auto flex h-full max-w-7xl items-end px-6 pb-8">
+		<div class="relative mx-auto max-w-6xl px-6 pt-8 pb-10 md:px-10 md:pt-10">
 			<a
 				href={resolve('/catalog')}
-				class="absolute top-6 left-6 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--bg-primary)]/80 text-[var(--text-primary)] shadow-md backdrop-blur transition-transform hover:scale-110"
+				class="mb-8 inline-flex items-center gap-2 text-[0.625rem] font-bold tracking-[0.18em] text-[var(--text-muted)] uppercase transition-colors hover:text-[var(--accent)]"
 			>
-				<ArrowLeft class="h-5 w-5" />
+				<ArrowLeft class="h-3.5 w-3.5" aria-hidden="true" />
+				Catálogo
 			</a>
 
-			<div class="flex w-full items-end gap-8">
+			<div class="flex flex-col gap-6 sm:flex-row sm:items-end">
 				<!-- Cover -->
-				{#if displayCover}
-					<div
-						class="card -mb-12 aspect-[3/4] w-44 flex-shrink-0 overflow-hidden rounded-xl border border-[var(--border)] shadow-2xl transition-transform duration-500 hover:scale-[1.02] md:w-56"
-					>
-						<img src={displayCover} alt="Capa" class="h-full w-full object-cover" />
-					</div>
-				{:else}
-					<div
-						class="card -mb-12 flex aspect-[3/4] w-44 flex-shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--bg-accent)] shadow-2xl md:w-56"
-					>
-						<BookOpen class="h-12 w-12 text-[var(--text-muted)]" />
-					</div>
-				{/if}
+				<div
+					class="volume aspect-[2/3] w-32 flex-shrink-0 rounded-[var(--radius)] shadow-2xl sm:w-40 md:w-48"
+				>
+					{#if displayCover}
+						<img
+							src={displayCover}
+							alt="Capa de {displayTitle}"
+							class="h-full w-full object-cover"
+						/>
+					{:else}
+						<div class="flex h-full w-full items-center justify-center">
+							<BookOpen class="h-10 w-10 text-[var(--text-muted)]" aria-hidden="true" />
+						</div>
+					{/if}
+				</div>
 
-				<!-- Info -->
-				<div class="flex-grow pb-2">
-					<div class="mb-3 flex flex-wrap gap-2">
-						<span
-							class="rounded-md bg-[var(--accent)] px-3 py-1 text-[10px] font-bold tracking-[0.2em] text-[var(--accent-foreground)] uppercase"
-						>
-							Manga
-						</span>
-						<span
-							class="rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-1 text-[10px] tracking-[0.2em] text-[var(--text-secondary)] uppercase"
-						>
-							{source}
-						</span>
+				<div class="min-w-0 flex-1">
+					<div class="mb-3 flex flex-wrap items-center gap-2">
+						<span class="chip chip-accent">{source}</span>
+						{#if chapters.length > 0}
+							<span class="kicker">
+								{chapters.length} capítulo{chapters.length !== 1 ? 's' : ''}
+							</span>
+						{/if}
 					</div>
 					<h1
-						class="font-display mb-4 text-3xl leading-[1.1] font-black tracking-tight md:text-5xl"
+						class="masthead text-balance text-[var(--text-primary)]"
+						style="font-size:clamp(2rem, 5vw, 3.75rem)"
 					>
 						{displayTitle}
 					</h1>
-					{#if chapters.length > 0}
-						<p class="text-xs font-bold tracking-widest text-[var(--text-secondary)] uppercase">
-							{chapters.length} capítulo{chapters.length !== 1 ? 's' : ''} disponíve{chapters.length !==
-							1
-								? 'is'
-								: 'l'}
-						</p>
-					{/if}
 				</div>
 			</div>
 		</div>
 	</div>
 
-	<div class="mx-auto max-w-7xl px-6 pt-16">
-		<!-- Generos -->
+	<div class="mx-auto max-w-6xl px-6 py-10 md:px-10">
+		<!-- Generos: `.chip` e o vocabulario do tema para etiqueta de genero. -->
 		{#if displayGenres.length > 0}
 			<div class="mb-6 flex flex-wrap gap-2">
 				{#each displayGenres as slug (slug)}
 					<a
 						href={resolve(`/catalog?genre=${slug}`)}
-						class="rounded-full border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-1.5 text-xs font-bold text-[var(--text-secondary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+						class="chip transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
 					>
 						{genreLabels[slug] ?? slug}
 					</a>
@@ -274,88 +266,110 @@
 
 		<!-- Description -->
 		{#if displayDescription}
-			<div class="mb-8 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-6">
+			<div class="mb-8 border border-[var(--border)] bg-[var(--bg-secondary)] p-6">
 				<p class="text-sm leading-relaxed text-[var(--text-secondary)]">{displayDescription}</p>
 			</div>
 		{/if}
 
 		<!-- Actions -->
-		<div class="mb-8 flex flex-wrap items-center gap-4">
-			<button onclick={toggleLibrary} class="btn-primary flex items-center gap-2">
+		<div class="mb-10 flex flex-wrap items-center gap-4">
+			<button onclick={toggleLibrary} class={inLibrary ? 'btn-ghost' : 'btn-primary'}>
 				{#if inLibrary}
-					<BookmarkMinus class="h-4 w-4" /> Remover da Biblioteca
+					<BookmarkMinus class="h-4 w-4" aria-hidden="true" />
+					Remover da biblioteca
 				{:else}
-					<BookmarkPlus class="h-4 w-4" /> Adicionar à Biblioteca
+					<BookmarkPlus class="h-4 w-4" aria-hidden="true" />
+					Adicionar à biblioteca
 				{/if}
 			</button>
 			{#if resumeChapter}
-				<a
-					href={resolve(`/reader/${source}/${id}/${resumeChapter.source_id}`)}
-					class="flex items-center gap-2 rounded-2xl border border-[var(--accent)]/30 px-6 py-3 text-sm font-bold text-[var(--accent)] transition-all hover:bg-[var(--accent)]/5"
-				>
-					<BookOpen class="h-4 w-4" />
+				<a href={resolve(`/reader/${source}/${id}/${resumeChapter.source_id}`)} class="btn-ghost">
+					<BookOpen class="h-4 w-4" aria-hidden="true" />
 					{#if libraryManga?.lastChapterId === resumeChapter.source_id}
 						Continuar{resumeChapter.chapter ? ` — Cap. ${resumeChapter.chapter}` : ''}
 					{:else}
-						Começar a Ler
+						Começar a ler
 					{/if}
 				</a>
 			{/if}
 		</div>
 
+		<!-- Description -->
+		{#if displayDescription}
+			<div class="card registration mb-10 p-6">
+				<p class="kicker mb-3">Sinopse</p>
+				<p class="text-sm leading-relaxed text-[var(--text-secondary)]">{displayDescription}</p>
+			</div>
+		{/if}
+
 		{#if downloadError}
-			<div class="mb-8 rounded-xl border border-red-500/50 bg-red-500/10 p-4 text-sm text-red-500">
-				{downloadError}
+			<div
+				class="registration mb-8 flex items-start gap-3 border border-[var(--accent)]/40 bg-[var(--accent)]/5 px-5 py-4"
+			>
+				<AlertTriangle
+					class="mt-0.5 h-4 w-4 flex-shrink-0 text-[var(--accent)]"
+					aria-hidden="true"
+				/>
+				<p class="text-sm text-[var(--text-secondary)]">{downloadError}</p>
 			</div>
 		{/if}
 
 		<!-- Chapters -->
-		<div class="mb-4 flex items-center justify-between">
-			<h2 class="text-2xl font-bold">Capítulos</h2>
+		<div class="mb-5 flex items-baseline justify-between border-b border-[var(--border)] pb-3">
+			<h2 class="text-lg tracking-wide text-[var(--text-primary)] uppercase">Capítulos</h2>
+			{#if chapters.length > 0}
+				<span class="kicker tabular">{chapters.length} no total</span>
+			{/if}
 		</div>
 
 		{#if isLoading}
-			<div class="flex items-center justify-center py-12">
-				<Loader2 class="h-8 w-8 animate-spin text-[var(--accent)]" />
+			<div class="flex items-center justify-center py-16">
+				<Loader2 class="h-8 w-8 animate-spin text-[var(--accent)]" aria-hidden="true" />
 			</div>
 		{:else if error}
-			<div class="rounded-xl border border-red-500/50 bg-red-500/10 p-4 text-red-500">
-				{error}
+			<div
+				class="registration flex items-start gap-3 border border-[var(--accent)]/40 bg-[var(--accent)]/5 px-5 py-4"
+			>
+				<AlertTriangle
+					class="mt-0.5 h-4 w-4 flex-shrink-0 text-[var(--accent)]"
+					aria-hidden="true"
+				/>
+				<p class="text-sm text-[var(--text-secondary)]">{error}</p>
 			</div>
 		{:else if chapters.length === 0}
-			<div class="py-12 text-center text-[var(--text-muted)]">
-				Nenhum capítulo encontrado neste idioma.
+			<div class="border border-dashed border-[var(--rule)] px-6 py-16 text-center">
+				<p class="text-sm text-[var(--text-secondary)]">Nenhum capítulo encontrado neste idioma.</p>
 			</div>
 		{:else}
-			<div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-				{#each chapters as chapter (chapter.source_id)}
+			<div class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+				{#each chapters as chapter, i (chapter.source_id)}
+					{@const isRead = mangaStore.isChapterRead(id, source, chapter.source_id)}
 					<div
-						class="group flex items-center justify-between rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] transition-all hover:border-[var(--accent)]"
+						class="group flex items-stretch border border-[var(--border)] bg-[var(--bg-secondary)] transition-colors hover:border-[var(--accent)]"
 					>
 						<a
 							href={resolve(`/reader/${source}/${id}/${chapter.source_id}`)}
-							class="flex min-w-0 flex-1 items-center justify-between p-4"
+							class="flex min-w-0 flex-1 items-center gap-4 p-4"
 						>
+							<span class="folio flex-shrink-0" style="font-size:1.375rem">
+								{String(i + 1).padStart(2, '0')}
+							</span>
 							<div class="min-w-0 flex-1">
 								<h3
 									class={[
-										'flex items-center gap-2 font-bold transition-colors group-hover:text-[var(--accent)]',
-										mangaStore.isChapterRead(id, source, chapter.source_id)
-											? 'text-[var(--text-muted)]'
-											: 'text-[var(--text-primary)]'
+										'flex items-center gap-2 truncate text-sm font-semibold transition-colors group-hover:text-[var(--accent)]',
+										isRead ? 'text-[var(--text-muted)]' : 'text-[var(--text-primary)]'
 									].join(' ')}
 								>
 									{chapter.chapter ? `Cap. ${chapter.chapter}` : chapter.title || 'Sem título'}
-									{#if mangaStore.isChapterRead(id, source, chapter.source_id)}
-										<span class="text-[9px] font-black tracking-widest text-green-500 uppercase">
-											lido
-										</span>
-									{/if}
 								</h3>
 								{#if chapter.title && chapter.chapter}
-									<p class="truncate text-sm text-[var(--text-secondary)]">{chapter.title}</p>
-								{:else}
-									<p class="text-xs tracking-wider text-[var(--text-muted)] uppercase">{source}</p>
+									<p class="truncate text-xs text-[var(--text-secondary)]">{chapter.title}</p>
+								{/if}
+								{#if isRead}
+									<span class="stamp mt-1 text-green-500">
+										<Check class="h-2.5 w-2.5" aria-hidden="true" /> Lido
+									</span>
 								{/if}
 							</div>
 						</a>
@@ -364,18 +378,18 @@
 						{#if downloadedMap[chapter.source_id] === 'downloaded'}
 							<button
 								onclick={(e) => handleDownload(chapter, e)}
-								class="flex cursor-pointer items-center justify-center border-l border-[var(--border)] p-4 text-green-500 transition-colors group-hover:border-[var(--accent)]/40 hover:text-red-500"
+								class="flex flex-shrink-0 cursor-pointer items-center justify-center border-l border-[var(--border)] px-4 text-green-500 transition-colors group-hover:border-[var(--accent)]/40 hover:text-[var(--accent)]"
 								title="Capítulo salvo offline. Clique para apagar."
 							>
-								<Check class="h-5 w-5" />
+								<Check class="h-4 w-4" aria-hidden="true" />
 							</button>
 						{:else if downloadedMap[chapter.source_id] === 'downloading'}
 							<div
-								class="flex min-w-[53px] flex-col items-center justify-center gap-1 border-l border-[var(--border)] p-4 text-[9px] font-bold text-[var(--accent)] group-hover:border-[var(--accent)]/40"
+								class="flex min-w-[3.25rem] flex-shrink-0 flex-col items-center justify-center gap-1 border-l border-[var(--border)] px-4 text-[0.5625rem] font-bold text-[var(--accent)] group-hover:border-[var(--accent)]/40"
 								title="Baixando capítulo..."
 							>
-								<RefreshCw class="h-4 w-4 animate-spin" />
-								<span>{downloadProgress[chapter.source_id] || 0}%</span>
+								<RefreshCw class="h-4 w-4 animate-spin" aria-hidden="true" />
+								<span class="tabular">{downloadProgress[chapter.source_id] || 0}%</span>
 							</div>
 						{:else if downloadedMap[chapter.source_id] === 'partial'}
 							<button
@@ -389,10 +403,10 @@
 						{:else}
 							<button
 								onclick={(e) => handleDownload(chapter, e)}
-								class="flex cursor-pointer items-center justify-center border-l border-[var(--border)] p-4 text-[var(--text-muted)] transition-colors group-hover:border-[var(--accent)]/40 hover:text-[var(--accent)]"
+								class="flex flex-shrink-0 cursor-pointer items-center justify-center border-l border-[var(--border)] px-4 text-[var(--text-muted)] transition-colors group-hover:border-[var(--accent)]/40 hover:text-[var(--accent)]"
 								title="Baixar capítulo para ler offline"
 							>
-								<Download class="h-5 w-5" />
+								<Download class="h-4 w-4" aria-hidden="true" />
 							</button>
 						{/if}
 					</div>

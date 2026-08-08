@@ -2,19 +2,22 @@
 	import { mangaStore, type Manga } from '$lib/stores/manga.svelte';
 	import {
 		Search,
-		Filter,
-		BookOpen,
+		SlidersHorizontal,
 		Trash2,
-		ChevronDown,
 		Compass,
+		ArrowRight,
+		X,
 		Plus,
 		Check,
-		X,
 		Pencil,
 		FolderPlus,
 		Library
 	} from 'lucide-svelte';
 	import { resolve } from '$app/paths';
+	import { cn } from '$lib/utils';
+	import PageHeader from '$lib/components/PageHeader.svelte';
+	import VolumeCard from '$lib/components/VolumeCard.svelte';
+	import VolumeGridSkeleton from '$lib/components/VolumeGridSkeleton.svelte';
 
 	type SortKey = 'addedAt' | 'title' | 'progress' | 'lastReadAt';
 	type FilterKey = 'all' | 'reading' | 'completed' | 'unread';
@@ -24,6 +27,7 @@
 	let sortBy = $state<SortKey>('addedAt');
 	let filterBy = $state<FilterKey>('all');
 	let filterMenuOpen = $state(false);
+	let filterMenu = $state<HTMLDivElement | null>(null);
 
 	/** Pasta selecionada na faixa de abas. null = "Todos". */
 	let activeFolderId = $state<string | null>(null);
@@ -58,10 +62,11 @@
 		unread: 'Não iniciados'
 	};
 
-	const filteredLibrary = $derived(() => {
-		let list = mangaStore.library.filter((m) =>
-			m.title.toLowerCase().includes(searchQuery.toLowerCase())
-		);
+	const isFiltered = $derived(filterBy !== 'all' || sortBy !== 'addedAt');
+
+	const filteredLibrary = $derived.by(() => {
+		const term = searchQuery.trim().toLowerCase();
+		let list = mangaStore.library.filter((m) => m.title.toLowerCase().includes(term));
 
 		// A pasta e mais um filtro em cadeia: busca, pasta, status e ordenacao
 		// continuam valendo todos ao mesmo tempo.
@@ -71,8 +76,8 @@
 		else if (filterBy === 'completed') list = list.filter((m) => m.progress >= 100);
 		else if (filterBy === 'unread') list = list.filter((m) => m.progress === 0);
 
-		list = [...list].sort((a, b) => {
-			if (sortBy === 'title') return a.title.localeCompare(b.title);
+		return [...list].sort((a, b) => {
+			if (sortBy === 'title') return a.title.localeCompare(b.title, 'pt-BR');
 			if (sortBy === 'progress') return b.progress - a.progress;
 			if (sortBy === 'lastReadAt') {
 				return (
@@ -82,18 +87,22 @@
 			}
 			return new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime();
 		});
-
-		return list;
 	});
 
+	const reading = $derived(mangaStore.recentManga.slice(0, 3));
+
 	/**
-	 * Da biblioteca sempre para a pagina do manga, nunca direto para o leitor.
+	 * Retoma no ultimo capitulo lido; sem historico, cai na pagina do manga.
 	 *
-	 * La estao a sinopse, a lista de capitulos e o botao "Continuar" — abrir o
-	 * leitor de imediato tirava do usuario a chance de escolher outro capitulo.
+	 * So a faixa "Continuar lendo" usa este atalho. A grade da estante aponta
+	 * sempre para a pagina do manga: la estao a sinopse, a lista de capitulos e o
+	 * botao "Continuar" — abrir o leitor de imediato tirava do usuario a chance
+	 * de escolher outro capitulo.
 	 */
-	function mangaHref(manga: { id: string; source: string }) {
-		return resolve(`/manga/${manga.source}/${manga.id}`);
+	function resumeHref(manga: Manga) {
+		return manga.lastChapterId
+			? resolve(`/reader/${manga.source}/${manga.id}/${manga.lastChapterId}`)
+			: resolve(`/manga/${manga.source}/${manga.id}`);
 	}
 
 	function confirmCreateFolder() {
@@ -138,6 +147,17 @@
 		pickerNewFolder = '';
 	}
 
+	/** Texto da obi: prioriza o capitulo, cai no progresso, depois no autor. */
+	function obiFor(manga: Manga): string | undefined {
+		if (manga.lastChapterLabel) {
+			return manga.progress > 0
+				? `${manga.lastChapterLabel} · ${manga.progress}%`
+				: manga.lastChapterLabel;
+		}
+		if (manga.progress > 0) return `${manga.progress}% lido`;
+		return undefined;
+	}
+
 	function requestDelete(source: string, id: string, e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
@@ -151,126 +171,158 @@
 			}, 3000);
 		}
 	}
+
+	// O menu antes fechava so no mouseleave, o que travava no toque e no teclado.
+	function handleWindowPointerDown(e: PointerEvent) {
+		if (!filterMenuOpen) return;
+		if (filterMenu && !filterMenu.contains(e.target as Node)) filterMenuOpen = false;
+	}
+
+	function handleWindowKeyDown(e: KeyboardEvent) {
+		if (e.key === 'Escape' && filterMenuOpen) filterMenuOpen = false;
+	}
 </script>
 
-<main class="font-body mx-auto max-w-7xl px-6 py-12 pb-24 text-[var(--text-primary)]">
-	<header class="mb-12 flex flex-col justify-between gap-6 md:flex-row md:items-center">
-		<div>
-			<h1 class="font-display mb-2 text-4xl font-bold text-[var(--accent)] md:text-5xl">Hiraku</h1>
-			<p class="text-lg text-[var(--text-secondary)]">Sua biblioteca pessoal de mangás.</p>
-		</div>
+<svelte:window onpointerdown={handleWindowPointerDown} onkeydown={handleWindowKeyDown} />
 
-		<div class="flex items-center gap-3">
-			<div class="group relative">
-				<Search
-					class="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)] transition-colors group-focus-within:text-[var(--accent)]"
-				/>
-				<input
-					type="text"
-					bind:value={searchQuery}
-					placeholder="Buscar na biblioteca..."
-					class="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-secondary)] py-2 pr-4 pl-10 transition-all focus:border-[var(--accent)] focus:outline-none md:w-64"
-				/>
-			</div>
-			<div class="relative">
-				<button
-					onclick={() => (filterMenuOpen = !filterMenuOpen)}
-					class="flex items-center gap-1.5 rounded-[var(--radius)] border border-[var(--border)] p-2 px-3 transition-colors hover:bg-[var(--bg-secondary)]"
-				>
-					<Filter class="h-4 w-4" />
-					<span class="hidden text-xs font-bold sm:block"
-						>{filterBy !== 'all' || sortBy !== 'addedAt' ? '·' : ''}</span
-					>
-					<ChevronDown class="h-3 w-3 opacity-50" />
-				</button>
-				{#if filterMenuOpen}
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
+<main class="mx-auto max-w-[100rem] px-6 py-10 pb-28 md:px-10 md:py-14 xl:pb-14">
+	<PageHeader
+		kicker="Acervo local · {mangaStore.library.length} título{mangaStore.library.length === 1
+			? ''
+			: 's'}"
+		title="Biblioteca"
+		furigana="ほんだな"
+	>
+		{#snippet aside()}
+			<div class="flex items-end gap-4">
+				<div class="group relative flex-1 lg:w-72">
+					<label for="library-search" class="kicker mb-1.5 block">Buscar</label>
 					<div
-						class="absolute top-full right-0 z-50 mt-2 flex w-56 flex-col gap-1 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-3 shadow-2xl"
-						onmouseleave={() => (filterMenuOpen = false)}
+						class="flex items-center gap-2 border-b border-[var(--rule)] focus-within:border-[var(--accent)]"
 					>
-						<p
-							class="mb-1 px-2 text-[9px] font-black tracking-widest text-[var(--text-muted)] uppercase"
-						>
-							Ordenar
-						</p>
-						{#each Object.entries(SORT_LABELS) as [key, label] (key)}
+						<Search
+							class="h-4 w-4 flex-shrink-0 text-[var(--text-muted)] transition-colors group-focus-within:text-[var(--accent)]"
+							aria-hidden="true"
+						/>
+						<input
+							id="library-search"
+							type="search"
+							bind:value={searchQuery}
+							placeholder="Título…"
+							class="w-full border-0 bg-transparent py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
+						/>
+						{#if searchQuery}
 							<button
-								onclick={() => {
-									sortBy = key as SortKey;
-								}}
-								class="flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--bg-accent)]/10 {sortBy ===
-								key
-									? 'font-bold text-[var(--accent)]'
-									: ''}"
+								type="button"
+								onclick={() => (searchQuery = '')}
+								class="p-1 text-[var(--text-muted)] hover:text-[var(--accent)]"
 							>
-								{label}
-								{#if sortBy === key}<span class="h-1.5 w-1.5 rounded-full bg-[var(--accent)]"
-									></span>{/if}
+								<X class="h-3.5 w-3.5" />
+								<span class="sr-only">Limpar busca</span>
 							</button>
-						{/each}
-						<div class="my-1 border-t border-[var(--border)]"></div>
-						<p
-							class="mb-1 px-2 text-[9px] font-black tracking-widest text-[var(--text-muted)] uppercase"
-						>
-							Filtrar
-						</p>
-						{#each Object.entries(FILTER_LABELS) as [key, label] (key)}
-							<button
-								onclick={() => {
-									filterBy = key as FilterKey;
-								}}
-								class="flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--bg-accent)]/10 {filterBy ===
-								key
-									? 'font-bold text-[var(--accent)]'
-									: ''}"
-							>
-								{label}
-								{#if filterBy === key}<span class="h-1.5 w-1.5 rounded-full bg-[var(--accent)]"
-									></span>{/if}
-							</button>
-						{/each}
+						{/if}
 					</div>
-				{/if}
+				</div>
+
+				<div class="relative" bind:this={filterMenu}>
+					<button
+						type="button"
+						onclick={() => (filterMenuOpen = !filterMenuOpen)}
+						aria-expanded={filterMenuOpen}
+						aria-haspopup="true"
+						class={cn(
+							'flex items-center gap-2 border px-3 py-2.5 text-[0.5625rem] font-bold tracking-[0.18em] uppercase transition-colors',
+							isFiltered
+								? 'border-[var(--accent)] text-[var(--accent)]'
+								: 'border-[var(--rule)] text-[var(--text-secondary)] hover:border-[var(--text-secondary)]'
+						)}
+					>
+						<SlidersHorizontal class="h-3.5 w-3.5" aria-hidden="true" />
+						<span class="hidden sm:inline">
+							{isFiltered ? FILTER_LABELS[filterBy] : 'Ordenar'}
+						</span>
+					</button>
+
+					{#if filterMenuOpen}
+						<div
+							class="absolute top-full right-0 z-50 mt-2 flex w-60 flex-col border border-[var(--rule)] bg-[var(--bg-secondary)] p-2 shadow-2xl"
+						>
+							<p class="kicker px-2 py-2">Ordenar por</p>
+							{#each Object.entries(SORT_LABELS) as [key, label] (key)}
+								<button
+									type="button"
+									onclick={() => (sortBy = key as SortKey)}
+									class={cn(
+										'flex items-center justify-between px-2 py-2 text-left text-sm transition-colors hover:text-[var(--accent)]',
+										sortBy === key
+											? 'font-semibold text-[var(--accent)]'
+											: 'text-[var(--text-secondary)]'
+									)}
+								>
+									{label}
+									{#if sortBy === key}<span class="h-1.5 w-1.5 bg-[var(--accent)]"></span>{/if}
+								</button>
+							{/each}
+
+							<div class="my-2 border-t border-[var(--border)]"></div>
+
+							<p class="kicker px-2 py-2">Filtrar</p>
+							{#each Object.entries(FILTER_LABELS) as [key, label] (key)}
+								<button
+									type="button"
+									onclick={() => (filterBy = key as FilterKey)}
+									class={cn(
+										'flex items-center justify-between px-2 py-2 text-left text-sm transition-colors hover:text-[var(--accent)]',
+										filterBy === key
+											? 'font-semibold text-[var(--accent)]'
+											: 'text-[var(--text-secondary)]'
+									)}
+								>
+									{label}
+									{#if filterBy === key}<span class="h-1.5 w-1.5 bg-[var(--accent)]"></span>{/if}
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
 			</div>
-		</div>
-	</header>
+		{/snippet}
+	</PageHeader>
 
 	{#if mangaStore.isLoading}
-		<div class="flex items-center justify-center py-24">
-			<div class="h-12 w-12 animate-spin rounded-full border-b-2 border-[var(--accent)]"></div>
-		</div>
+		<VolumeGridSkeleton count={10} />
 	{:else if mangaStore.library.length === 0}
-		<div
-			class="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--border)] px-6 py-24 text-center"
-		>
-			<div
-				class="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-[var(--bg-secondary)]"
-			>
-				<BookOpen class="h-10 w-10 text-[var(--text-muted)]" />
-			</div>
-			<h2 class="mb-2 text-2xl">Sua biblioteca está vazia</h2>
-			<p class="mb-8 max-w-md text-[var(--text-secondary)]">
-				Explore o catálogo e adicione mangás à sua biblioteca.
+		<!-- Estado vazio como uma faixa de obi em branco: convida sem enfeitar. -->
+		<div class="registration halftone border border-[var(--rule)] px-6 py-20 text-center">
+			<p class="kicker mb-5">Nada encadernado ainda</p>
+			<h2 class="masthead mx-auto max-w-xl text-balance text-[var(--text-primary)]">
+				Sua estante está vazia
+			</h2>
+			<p class="mx-auto mt-5 mb-9 max-w-sm text-sm leading-relaxed text-[var(--text-secondary)]">
+				Busque um título no catálogo e ele passa a viver aqui — com progresso e capítulos offline
+				guardados só no seu dispositivo.
 			</p>
-			<a href={resolve('/catalog')} class="btn-primary flex items-center gap-2">
-				<Compass class="h-5 w-5" />
-				Explorar Catálogo
+			<a href={resolve('/catalog')} class="btn-primary">
+				<Compass class="h-4 w-4" aria-hidden="true" />
+				Explorar catálogo
 			</a>
 		</div>
 	{:else}
-		<!-- Faixa de pastas: "Todos" fixo a esquerda + as pastas do usuario. -->
+		<!-- Faixa de pastas: "Todos" fixo a esquerda + as pastas do usuario.
+		     Segue o vocabulario do tema: retangulo com regra, sem pilula. -->
 		<nav class="mb-10 flex flex-wrap items-center gap-2">
 			<button
 				onclick={() => (activeFolderId = null)}
-				class="flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm transition-colors {activeFolder ===
-				undefined
-					? 'border-[var(--accent)] bg-[var(--accent)] font-bold text-[var(--accent-foreground)]'
-					: 'border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]'}"
+				class={cn(
+					'chip transition-colors',
+					activeFolder === undefined
+						? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]'
+						: 'hover:border-[var(--accent)] hover:text-[var(--accent)]'
+				)}
 			>
-				<Library class="h-3.5 w-3.5" />
+				<Library class="h-3 w-3" aria-hidden="true" />
 				Todos
-				<span class="text-xs opacity-60">{mangaStore.library.length}</span>
+				<span class="tabular opacity-60">{mangaStore.library.length}</span>
 			</button>
 
 			{#each mangaStore.folders as folder (folder.id)}
@@ -280,7 +332,7 @@
 							e.preventDefault();
 							confirmRename();
 						}}
-						class="flex items-center gap-1 rounded-full border border-[var(--accent)] bg-[var(--bg-secondary)] py-1 pr-1 pl-3"
+						class="flex items-center gap-1 border border-[var(--accent)] bg-[var(--bg-secondary)] py-0.5 pr-0.5 pl-2"
 					>
 						<!-- svelte-ignore a11y_autofocus -->
 						<input
@@ -292,7 +344,7 @@
 							class="w-28 bg-transparent text-sm focus:outline-none"
 						/>
 						<button type="submit" title="Salvar nome" class="p-1 text-[var(--accent)]">
-							<Check class="h-3.5 w-3.5" />
+							<Check class="h-3.5 w-3.5" aria-hidden="true" />
 						</button>
 						<button
 							type="button"
@@ -300,35 +352,35 @@
 							onclick={() => (renamingFolderId = null)}
 							class="p-1 text-[var(--text-muted)]"
 						>
-							<X class="h-3.5 w-3.5" />
+							<X class="h-3.5 w-3.5" aria-hidden="true" />
 						</button>
 					</form>
 				{:else}
 					<div
-						class="group/folder flex items-center rounded-full border transition-colors {activeFolder?.id ===
-						folder.id
-							? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]'
-							: 'border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]'}"
+						class={cn(
+							'group/folder flex items-center border transition-colors',
+							activeFolder?.id === folder.id
+								? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]'
+								: 'border-[var(--rule)] text-[var(--text-secondary)] hover:border-[var(--accent)]'
+						)}
 					>
 						<button
 							onclick={() => (activeFolderId = folder.id)}
-							class="flex items-center gap-1.5 py-1.5 pl-4 text-sm {activeFolder?.id === folder.id
-								? 'font-bold'
-								: ''}"
+							class="flex items-center gap-1.5 py-1 pl-2 text-[0.5625rem] font-bold tracking-[0.14em] uppercase"
 						>
 							{folder.name}
-							<span class="text-xs opacity-60">{mangaStore.folderCount(folder.id)}</span>
+							<span class="tabular opacity-60">{mangaStore.folderCount(folder.id)}</span>
 						</button>
 						<!-- Editar/excluir so aparecem no hover para a faixa nao virar um painel. -->
 						<span
-							class="flex items-center gap-0.5 pr-2 pl-1.5 opacity-0 transition-opacity group-hover/folder:opacity-100 focus-within:opacity-100"
+							class="flex items-center gap-0.5 pr-1 pl-1 opacity-0 transition-opacity group-hover/folder:opacity-100 focus-within:opacity-100"
 						>
 							<button
 								title="Renomear pasta"
 								onclick={() => startRename(folder.id, folder.name)}
-								class="rounded p-1 hover:text-[var(--accent)]"
+								class="p-1 hover:text-[var(--accent)]"
 							>
-								<Pencil class="h-3 w-3" />
+								<Pencil class="h-3 w-3" aria-hidden="true" />
 							</button>
 							<button
 								title={folderToDelete === folder.id
@@ -338,11 +390,14 @@
 									folderToDelete === folder.id
 										? confirmDeleteFolder(folder.id)
 										: (folderToDelete = folder.id)}
-								class="rounded p-1 {folderToDelete === folder.id
-									? 'bg-red-500 text-white'
-									: 'hover:text-red-500'}"
+								class={cn(
+									'p-1',
+									folderToDelete === folder.id
+										? 'bg-[var(--accent)] text-[var(--accent-foreground)]'
+										: 'hover:text-[var(--accent)]'
+								)}
 							>
-								<Trash2 class="h-3 w-3" />
+								<Trash2 class="h-3 w-3" aria-hidden="true" />
 							</button>
 						</span>
 					</div>
@@ -355,7 +410,7 @@
 						e.preventDefault();
 						confirmCreateFolder();
 					}}
-					class="flex items-center gap-1 rounded-full border border-[var(--accent)] bg-[var(--bg-secondary)] py-1 pr-1 pl-3"
+					class="flex items-center gap-1 border border-[var(--accent)] bg-[var(--bg-secondary)] py-0.5 pr-0.5 pl-2"
 				>
 					<!-- svelte-ignore a11y_autofocus -->
 					<input
@@ -371,7 +426,7 @@
 						class="w-32 bg-transparent text-sm placeholder:text-[var(--text-muted)] focus:outline-none"
 					/>
 					<button type="submit" title="Criar pasta" class="p-1 text-[var(--accent)]">
-						<Check class="h-3.5 w-3.5" />
+						<Check class="h-3.5 w-3.5" aria-hidden="true" />
 					</button>
 					<button
 						type="button"
@@ -382,144 +437,178 @@
 						}}
 						class="p-1 text-[var(--text-muted)]"
 					>
-						<X class="h-3.5 w-3.5" />
+						<X class="h-3.5 w-3.5" aria-hidden="true" />
 					</button>
 				</form>
 			{:else}
 				<button
 					onclick={() => (creatingFolder = true)}
 					title="Criar pasta"
-					class="flex items-center gap-1.5 rounded-full border border-dashed border-[var(--border)] px-4 py-1.5 text-sm text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+					class="chip border-dashed text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
 				>
-					<FolderPlus class="h-3.5 w-3.5" />
+					<FolderPlus class="h-3 w-3" aria-hidden="true" />
 					Nova pasta
 				</button>
 			{/if}
 		</nav>
 
-		{#if mangaStore.recentManga.length > 0}
-			<section class="mb-16">
-				<h3 class="mb-6 text-sm text-xl tracking-widest uppercase opacity-60">Continuar Lendo</h3>
-				<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-					{#each mangaStore.recentManga.slice(0, 2) as manga (manga.id + manga.source)}
-						<!-- eslint-disable svelte/no-navigation-without-resolve -- mangaHref() ja aplica resolve() -->
+		{#if reading.length > 0}
+			<section class="mb-16" aria-labelledby="continuar">
+				<div class="mb-5 flex items-baseline justify-between border-b border-[var(--border)] pb-3">
+					<h2 id="continuar" class="text-lg tracking-wide text-[var(--text-primary)] uppercase">
+						Continuar lendo
+					</h2>
+					<span class="kicker">Retomar de onde parou</span>
+				</div>
+
+				<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+					{#each reading as manga (manga.id + manga.source)}
+						<!-- eslint-disable svelte/no-navigation-without-resolve -- resumeHref() ja aplica resolve() -->
 						<a
-							href={mangaHref(manga)}
-							class="card group flex h-48 cursor-pointer transition-colors hover:border-[var(--accent)]"
+							href={resumeHref(manga)}
+							class="group flex items-stretch gap-0 border border-[var(--border)] bg-[var(--bg-secondary)] transition-colors hover:border-[var(--accent)]"
 						>
-							<div class="relative w-32 flex-shrink-0 bg-[var(--bg-accent)]">
+							<!-- eslint-enable svelte/no-navigation-without-resolve -->
+							<div class="volume w-24 flex-shrink-0 sm:w-28">
 								{#if manga.coverUrl}
-									<img src={manga.coverUrl} alt="Capa" class="h-full w-full object-cover" />
+									<img
+										src={manga.coverUrl}
+										alt="Capa de {manga.title}"
+										class="h-full w-full object-cover"
+										loading="eager"
+									/>
 								{:else}
-									<div class="flex h-full w-full items-center justify-center">
-										<BookOpen class="h-8 w-8 text-[var(--text-muted)]" />
-									</div>
+									<div class="halftone h-full w-full"></div>
 								{/if}
 							</div>
-							<div class="flex flex-1 flex-col p-5">
-								<h4
-									class="mb-1 line-clamp-2 text-lg font-bold text-[var(--text-primary)] group-hover:text-[var(--accent)]"
-								>
-									{manga.title}
-								</h4>
-								<p class="text-sm text-[var(--text-secondary)]">
-									{manga.lastChapterLabel || manga.author || 'Continuar leitura'}
-								</p>
-								<div class="mt-4 flex items-center justify-between">
-									<span class="text-sm text-[var(--text-muted)]">
-										{manga.totalPage > 0
-											? `Pág. ${manga.lastReadPage} / ${manga.totalPage}`
-											: 'Começar'}
-									</span>
-									<div class="text-[var(--accent)] transition-transform group-hover:translate-x-1">
-										<BookOpen class="h-6 w-6" />
+
+							<div class="flex min-w-0 flex-1 flex-col justify-between p-4">
+								<div class="min-w-0">
+									<p class="kicker mb-2 truncate">
+										{manga.lastChapterLabel || 'Começar do início'}
+									</p>
+									<h3
+										class="line-clamp-2 text-base leading-tight font-semibold text-[var(--text-primary)] transition-colors group-hover:text-[var(--accent)]"
+									>
+										{manga.title}
+									</h3>
+								</div>
+
+								<div class="mt-4">
+									<div class="mb-2 flex items-end justify-between gap-2">
+										<span
+											class="tabular text-[0.625rem] font-bold tracking-[0.16em] text-[var(--text-muted)] uppercase"
+										>
+											{manga.totalPage > 0
+												? `Pág. ${manga.lastReadPage}/${manga.totalPage}`
+												: 'Nova leitura'}
+										</span>
+										<span class="folio text-[var(--accent)]" style="font-size:1.375rem">
+											{manga.progress}<span class="text-[0.625rem]">%</span>
+										</span>
+									</div>
+									<div class="h-[3px] w-full bg-[var(--bg-accent)]">
+										<div
+											class="h-full bg-[var(--accent)] transition-[width] duration-500"
+											style="width: {Math.min(manga.progress, 100)}%"
+										></div>
 									</div>
 								</div>
 							</div>
+
+							<div
+								class="flex w-10 flex-shrink-0 items-center justify-center border-l border-[var(--border)] text-[var(--text-muted)] transition-colors group-hover:border-[var(--accent)] group-hover:bg-[var(--accent)] group-hover:text-[var(--accent-foreground)]"
+							>
+								<ArrowRight class="h-4 w-4" aria-hidden="true" />
+							</div>
 						</a>
-						<!-- eslint-enable svelte/no-navigation-without-resolve -->
 					{/each}
 				</div>
 			</section>
 		{/if}
 
-		<section>
-			<h3 class="mb-6 text-sm text-xl tracking-widest uppercase opacity-60">
-				{activeFolder ? activeFolder.name : 'Minha Biblioteca'}
-			</h3>
-			{#if filteredLibrary().length === 0}
-				<div
-					class="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--border)] px-6 py-16 text-center"
-				>
-					<p class="text-[var(--text-secondary)]">
+		<section aria-labelledby="estante">
+			<div class="mb-5 flex items-baseline justify-between border-b border-[var(--border)] pb-3">
+				<h2 id="estante" class="text-lg tracking-wide text-[var(--text-primary)] uppercase">
+					{activeFolder ? activeFolder.name : 'Estante'}
+				</h2>
+				<span class="kicker tabular">
+					{filteredLibrary.length} de {activeFolder
+						? mangaStore.folderCount(activeFolder.id)
+						: mangaStore.library.length}
+					{isFiltered || searchQuery ? '· filtrado' : ''}
+				</span>
+			</div>
+
+			{#if filteredLibrary.length === 0}
+				<div class="border border-dashed border-[var(--rule)] px-6 py-16 text-center">
+					<p class="text-sm text-[var(--text-secondary)]">
 						{activeFolder
 							? `Nenhum mangá em "${activeFolder.name}" com os filtros atuais.`
-							: 'Nenhum mangá corresponde aos filtros atuais.'}
+							: 'Nenhum título corresponde a esses critérios.'}
 					</p>
 					{#if activeFolder}
-						<p class="mt-2 text-sm text-[var(--text-muted)]">
+						<p class="mt-2 text-xs text-[var(--text-muted)]">
 							Use o ícone de pasta na capa de um mangá para adicioná-lo aqui.
 						</p>
 					{/if}
+					<button
+						type="button"
+						onclick={() => {
+							searchQuery = '';
+							filterBy = 'all';
+							sortBy = 'addedAt';
+						}}
+						class="mt-5 text-[0.625rem] font-bold tracking-[0.18em] text-[var(--accent)] uppercase underline decoration-1 underline-offset-4"
+					>
+						Limpar filtros
+					</button>
+				</div>
+			{:else}
+				<div
+					class="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+				>
+					{#each filteredLibrary as manga, i (manga.id + manga.source)}
+						<VolumeCard
+							href={resolve(`/manga/${manga.source}/${manga.id}`)}
+							title={manga.title}
+							coverUrl={manga.coverUrl}
+							obi={obiFor(manga)}
+							progress={manga.progress}
+							action="Abrir"
+							eager={i < 6}
+						>
+							{#snippet overlay()}
+								<button
+									type="button"
+									onclick={(e) => requestDelete(manga.source, manga.id, e)}
+									class={cn(
+										'absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center border transition-all',
+										deletingId === manga.id
+											? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)] opacity-100'
+											: 'border-[var(--rule)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] opacity-0 group-hover:opacity-100 hover:border-[var(--accent)] hover:text-[var(--accent)] focus-visible:opacity-100'
+									)}
+								>
+									<Trash2 class="h-3.5 w-3.5" aria-hidden="true" />
+									<span class="sr-only">
+										{deletingId === manga.id
+											? `Confirmar remoção de ${manga.title}`
+											: `Remover ${manga.title} da biblioteca`}
+									</span>
+								</button>
+								<button
+									type="button"
+									onclick={(e) => openPicker(manga, e)}
+									class="absolute top-2 left-2 z-10 flex h-7 w-7 items-center justify-center border border-[var(--rule)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] opacity-0 transition-all group-hover:opacity-100 hover:border-[var(--accent)] hover:text-[var(--accent)] focus-visible:opacity-100"
+								>
+									<FolderPlus class="h-3.5 w-3.5" aria-hidden="true" />
+									<span class="sr-only">Organizar {manga.title} em pastas</span>
+								</button>
+							{/snippet}
+						</VolumeCard>
+					{/each}
 				</div>
 			{/if}
-			<div class="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-				{#each filteredLibrary() as manga (manga.id + manga.source)}
-					<div class="group relative cursor-pointer">
-						<a href={resolve(`/manga/${manga.source}/${manga.id}`)}>
-							<div
-								class="card relative mb-3 aspect-[3/4] transition-transform duration-300 group-hover:-translate-y-2"
-							>
-								{#if manga.coverUrl}
-									<img src={manga.coverUrl} alt="Capa" class="h-full w-full object-cover" />
-								{:else}
-									<div class="flex h-full w-full items-center justify-center">
-										<BookOpen class="h-8 w-8 text-[var(--text-muted)]" />
-									</div>
-								{/if}
-								<div
-									class="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/60 via-transparent to-transparent pb-4 opacity-0 transition-opacity group-hover:opacity-100"
-								>
-									<span
-										class="flex items-center gap-1.5 rounded-md bg-[var(--accent)] px-3 py-1.5 text-[10px] font-black tracking-widest text-white uppercase"
-									>
-										<BookOpen class="h-3 w-3" /> ABRIR
-									</span>
-								</div>
-								{#if manga.progress > 0}
-									<div class="absolute bottom-0 left-0 h-1.5 w-full bg-black/40">
-										<div class="h-full bg-[var(--accent)]" style="width: {manga.progress}%"></div>
-									</div>
-								{/if}
-							</div>
-							<h4
-								class="font-body line-clamp-2 text-sm leading-snug font-medium transition-colors group-hover:text-[var(--accent)]"
-							>
-								{manga.title}
-							</h4>
-						</a>
-						<button
-							onclick={(e) => requestDelete(manga.source, manga.id, e)}
-							title={deletingId === manga.id ? 'Confirmar exclusão' : 'Remover da biblioteca'}
-							class={[
-								'absolute top-1 right-1 z-10 flex h-7 w-7 items-center justify-center rounded-full transition-all',
-								deletingId === manga.id
-									? 'scale-110 bg-red-500 text-white opacity-100'
-									: 'bg-black/60 text-white opacity-0 group-hover:opacity-100 hover:bg-red-500'
-							].join(' ')}
-						>
-							<Trash2 class="h-3.5 w-3.5" />
-						</button>
-						<button
-							onclick={(e) => openPicker(manga, e)}
-							title="Organizar em pastas"
-							class="absolute top-1 left-1 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-all group-hover:opacity-100 hover:bg-[var(--accent)]"
-						>
-							<FolderPlus class="h-3.5 w-3.5" />
-						</button>
-					</div>
-				{/each}
-			</div>
 		</section>
 	{/if}
 
