@@ -1,267 +1,266 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { ArrowLeft, Palette, Database, Shield, HardDrive, Trash2, Loader2 } from 'lucide-svelte';
-	import ThemeSwitcher from '$lib/components/ThemeSwitcher.svelte';
-	import { mangaStore } from '$lib/stores/manga.svelte';
-	import { offlineService, type OfflineChapterMeta } from '$lib/services/offline';
-	import { formatBytes } from '$lib/utils';
-	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
+	import { mangaStore, type Manga } from '$lib/stores/manga.svelte';
+	import { preferences, type ReadingMode } from '$lib/stores/preferences.svelte';
+	import { cn } from '$lib/utils';
 
-	let confirmClear = $state(false);
-	let confirmClearDownloads = $state(false);
-
-	let downloads = $state<OfflineChapterMeta[]>([]);
-	let downloadsLoading = $state(true);
-
-	const totalDownloadSize = $derived(downloads.reduce((sum, d) => sum + (d.sizeBytes || 0), 0));
-
-	const stats = $derived({
-		total: mangaStore.library.length,
-		pagesRead: mangaStore.library.reduce((s, m) => s + (m.lastReadPage || 0), 0),
-		completed: mangaStore.library.filter((m) => m.progress >= 100).length,
-		reading: mangaStore.library.filter((m) => m.progress > 0 && m.progress < 100).length
-	});
-
-	async function refreshDownloads() {
-		downloadsLoading = true;
-		try {
-			const list = await offlineService.getDownloadedChaptersList();
-			downloads = list.sort(
-				(a, b) => new Date(b.downloadedAt).getTime() - new Date(a.downloadedAt).getTime()
-			);
-		} catch (err) {
-			console.error('Falha ao listar downloads', err);
-		} finally {
-			downloadsLoading = false;
+	const themes: { id: string; name: string; kanji: string; desc: string }[] = [
+		{
+			id: 'theme-ink',
+			name: 'Sumi Ink (墨)',
+			kanji: '墨色',
+			desc: 'Preto profundo, inspirado na tinta sumi-ê tradicional com alto contraste.'
+		},
+		{
+			id: 'theme-neon',
+			name: 'Cyber Tokyo (夜)',
+			kanji: '電脳',
+			desc: 'Modo escuro futurista com iluminação neon cyberpunk e tons arroxeados.'
+		},
+		{
+			id: 'theme-paper',
+			name: 'Washi Parchment (和紙)',
+			kanji: '和紙',
+			desc: 'Papel artesanal japonês amarelado, textura suave e conforto ocular total.'
 		}
-	}
+	];
 
-	onMount(refreshDownloads);
-
-	async function removeDownload(item: OfflineChapterMeta) {
-		await offlineService.deleteChapter(item.source, item.mangaId, item.chapterId);
-		await refreshDownloads();
-	}
-
-	async function handleClearDownloads() {
-		if (!confirmClearDownloads) {
-			confirmClearDownloads = true;
-			setTimeout(() => (confirmClearDownloads = false), 4000);
-			return;
+	const readingModes: { id: ReadingMode; name: string; kanji: string; desc: string }[] = [
+		{
+			id: 'rtl',
+			name: 'Leitura Oriental (RTL)',
+			kanji: '右開',
+			desc: 'Direita para a esquerda, tradicional de mangás japoneses.'
+		},
+		{
+			id: 'vertical',
+			name: 'Webtoon / Contínuo',
+			kanji: '縦読',
+			desc: 'Rolagem vertical contínua para manhwas e webtoons.'
 		}
-		await offlineService.clearAll();
-		confirmClearDownloads = false;
-		await refreshDownloads();
-	}
+	];
+
+	// Estatísticas da Estante
+	const totalMangas = $derived(mangaStore.library.length);
+	const completedMangas = $derived(
+		mangaStore.library.filter((m: Manga) => m.progress >= 100).length
+	);
+	const inProgressMangas = $derived(
+		mangaStore.library.filter((m: Manga) => m.progress > 0 && m.progress < 100).length
+	);
+
+	let clearConfirm = $state(false);
 
 	function handleClearAll() {
-		if (!confirmClear) {
-			confirmClear = true;
-			setTimeout(() => (confirmClear = false), 4000);
+		if (!clearConfirm) {
+			clearConfirm = true;
 			return;
 		}
+		// Limpeza de histórico e cache local
 		mangaStore.clearAll();
-		confirmClear = false;
-		goto(resolve('/'));
+		localStorage.clear();
+		window.location.reload();
 	}
 </script>
 
-{#snippet sectionHead(icon: typeof Palette, label: string)}
-	{@const Icon = icon}
-	<div class="mb-6 flex items-center gap-3 border-b border-[var(--border)] pb-3">
-		<Icon class="h-4 w-4 text-[var(--accent)]" aria-hidden="true" />
-		<h2 class="text-sm font-bold tracking-[0.16em] text-[var(--text-primary)] uppercase">
-			{label}
-		</h2>
-	</div>
-{/snippet}
+<svelte:head>
+	<title>Configurações • 設定 — Hiraku (ひらく)</title>
+</svelte:head>
 
-<main class="mx-auto max-w-4xl px-6 py-10 pb-28 md:px-10 md:py-14 xl:pb-14">
-	<header class="mb-12 flex items-center gap-5">
-		<a
-			href={resolve('/')}
-			class="flex h-10 w-10 flex-shrink-0 items-center justify-center border border-[var(--rule)] text-[var(--text-primary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
-		>
-			<ArrowLeft class="h-4 w-4" aria-hidden="true" />
-		</a>
-		<div>
-			<p class="kicker mb-2">Preferências</p>
-			<h1 class="masthead text-[var(--text-primary)]" style="font-size:clamp(2rem, 6vw, 3.25rem)">
-				Configurações
-			</h1>
+<div class="max-w-4xl space-y-12 pb-16">
+	<!-- Cabeçalho Editorial -->
+	<header class="border-b border-[var(--rule)] pt-2 pb-6">
+		<div class="flex items-center gap-3">
+			<span class="hanko">設定</span>
+			<span class="font-mono text-xs tracking-widest text-[var(--text-muted)] uppercase">
+				PREFERENCES & SYSTEM METRICS
+			</span>
 		</div>
+		<h1
+			class="mt-2 font-serif text-4xl font-black tracking-tight text-[var(--text-primary)] uppercase sm:text-5xl"
+		>
+			Preferências & Configurações
+		</h1>
+		<p class="mt-1 font-mono text-xs text-[var(--text-muted)]">
+			Ajuste a identidade visual, motor de leitura tategaki e gerencie os dados offline da sua
+			biblioteca.
+		</p>
 	</header>
 
-	<div class="flex flex-col gap-14">
-		<!-- Estatisticas -->
-		<section aria-labelledby="stats-heading">
-			<h2 id="stats-heading" class="sr-only">Estatísticas</h2>
-			<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-				<div class="registration border border-[var(--border)] px-4 py-6 text-center">
-					<p class="folio text-[var(--accent)]">{stats.total}</p>
-					<p class="kicker mt-2">Mangás</p>
-				</div>
-				<div class="registration border border-[var(--border)] px-4 py-6 text-center">
-					<p class="folio tabular text-[var(--accent)]">
-						{stats.pagesRead.toLocaleString('pt-BR')}
-					</p>
-					<p class="kicker mt-2">Pág. lidas</p>
-				</div>
-				<div class="registration border border-[var(--border)] px-4 py-6 text-center">
-					<p class="folio text-[var(--accent)]">{stats.reading}</p>
-					<p class="kicker mt-2">Em andamento</p>
-				</div>
-				<div class="registration border border-[var(--border)] px-4 py-6 text-center">
-					<p class="folio text-[var(--accent)]">{stats.completed}</p>
-					<p class="kicker mt-2">Concluídos</p>
-				</div>
+	<!-- Estatísticas de Leitura (Painel Físico) -->
+	<section class="registration halftone border border-[var(--rule)] bg-[var(--bg-secondary)] p-6">
+		<div class="mb-4 flex items-center justify-between border-b border-[var(--rule)] pb-3">
+			<div class="flex items-center gap-2">
+				<span class="h-2 w-2 bg-[var(--accent)]"></span>
+				<h2 class="font-mono text-xs font-bold tracking-wider text-[var(--text-primary)] uppercase">
+					Métricas da Estante • 統計
+				</h2>
 			</div>
-		</section>
+			<span class="font-mono text-[0.625rem] text-[var(--text-muted)]">ESTANTE ATIVA</span>
+		</div>
 
-		<!-- Aparencia -->
-		<section aria-labelledby="appearance-heading">
-			<div id="appearance-heading">
-				{@render sectionHead(Palette, 'Aparência')}
-			</div>
-			<p class="-mt-3 mb-6 text-sm text-[var(--text-secondary)]">
-				Personalize as cores e o estilo do seu leitor.
-			</p>
-			<ThemeSwitcher />
-		</section>
-
-		<!-- Downloads -->
-		<section aria-labelledby="downloads-heading">
-			<div id="downloads-heading">
-				{@render sectionHead(HardDrive, 'Downloads')}
-			</div>
-			<p class="-mt-3 mb-6 text-sm text-[var(--text-secondary)]">
-				Capítulos salvos no dispositivo para leitura offline.
-			</p>
-
-			{#if downloadsLoading}
-				<div class="flex items-center justify-center py-10">
-					<Loader2 class="h-5 w-5 animate-spin text-[var(--accent)]" aria-hidden="true" />
-				</div>
-			{:else if downloads.length === 0}
-				<div
-					class="border border-dashed border-[var(--rule)] px-6 py-14 text-center text-sm text-[var(--text-muted)]"
+		<div class="grid grid-cols-3 gap-4 text-center">
+			<div class="border-r border-[var(--rule)] pr-4">
+				<span class="block font-serif text-3xl font-black text-[var(--text-primary)] sm:text-4xl">
+					{totalMangas}
+				</span>
+				<span
+					class="mt-1 block font-mono text-[0.625rem] tracking-wider text-[var(--text-muted)] uppercase"
 				>
-					Nenhum capítulo baixado ainda. Use o botão de download na lista de capítulos.
-				</div>
-			{:else}
-				<div class="card mb-4 flex items-center justify-between p-5">
+					Volumes Salvos
+				</span>
+			</div>
+
+			<div class="border-r border-[var(--rule)] pr-4">
+				<span class="block font-serif text-3xl font-black text-[var(--accent)] sm:text-4xl">
+					{inProgressMangas}
+				</span>
+				<span
+					class="mt-1 block font-mono text-[0.625rem] tracking-wider text-[var(--text-muted)] uppercase"
+				>
+					Em Leitura
+				</span>
+			</div>
+
+			<div>
+				<span class="block font-serif text-3xl font-black text-[var(--text-primary)] sm:text-4xl">
+					{completedMangas}
+				</span>
+				<span
+					class="mt-1 block font-mono text-[0.625rem] tracking-wider text-[var(--text-muted)] uppercase"
+				>
+					Concluídos
+				</span>
+			</div>
+		</div>
+	</section>
+
+	<!-- Seleção de Tema Visual Editorial -->
+	<section class="space-y-4">
+		<div class="flex items-center gap-2 border-b border-[var(--rule)] pb-2">
+			<span class="hanko text-xs">色彩</span>
+			<h2 class="font-mono text-sm font-bold tracking-wider text-[var(--text-primary)] uppercase">
+				Tema Visual & Paleta Japonesa
+			</h2>
+		</div>
+
+		<div class="grid gap-4 sm:grid-cols-3">
+			{#each themes as theme (theme.id)}
+				<button
+					type="button"
+					onclick={() => preferences.setTheme(theme.id)}
+					class={cn(
+						'registration group flex flex-col justify-between border p-5 text-left transition-all duration-300',
+						preferences.theme === theme.id
+							? 'border-[var(--accent)] bg-[var(--bg-secondary)] shadow-md'
+							: 'border-[var(--rule)] bg-[var(--bg-primary)] opacity-70 hover:opacity-100'
+					)}
+				>
 					<div>
-						<p class="text-sm font-semibold text-[var(--text-primary)]">
-							{downloads.length} capítulo{downloads.length !== 1 ? 's' : ''} · {formatBytes(
-								totalDownloadSize
-							)}
-						</p>
-						<p class="mt-0.5 text-xs text-[var(--text-muted)]">
-							{confirmClearDownloads
-								? 'Clique novamente para apagar todos.'
-								: 'Espaço ocupado no dispositivo.'}
+						<div class="flex items-center justify-between">
+							<span class="hanko text-[0.5625rem]">{theme.kanji}</span>
+							{#if preferences.theme === theme.id}
+								<span class="font-mono text-[0.625rem] font-bold text-[var(--accent)] uppercase">
+									ATIVO
+								</span>
+							{/if}
+						</div>
+
+						<h3
+							class="mt-3 font-serif text-base font-black tracking-tight text-[var(--text-primary)] uppercase"
+						>
+							{theme.name}
+						</h3>
+
+						<p class="mt-1 font-mono text-[0.6875rem] leading-relaxed text-[var(--text-muted)]">
+							{theme.desc}
 						</p>
 					</div>
-					<button
-						onclick={handleClearDownloads}
-						class={[
-							'flex-shrink-0 border px-3.5 py-2 text-[0.625rem] font-bold tracking-[0.14em] uppercase transition-all',
-							confirmClearDownloads
-								? 'animate-pulse border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]'
-								: 'border-[var(--accent)]/30 text-[var(--accent)] hover:bg-[var(--accent)]/10'
-						].join(' ')}
+
+					<div
+						class="mt-6 flex items-center justify-between border-t border-[var(--rule)] pt-3 font-mono text-[0.5625rem] text-[var(--text-muted)]"
 					>
-						{confirmClearDownloads ? 'Confirmar' : 'Apagar tudo'}
-					</button>
-				</div>
-
-				<div class="flex flex-col gap-2">
-					{#each downloads as item (item.source + item.mangaId + item.chapterId)}
-						<div
-							class="flex items-center justify-between gap-4 border border-[var(--border)] bg-[var(--bg-secondary)] p-4"
-						>
-							<a
-								href={resolve(`/reader/${item.source}/${item.mangaId}/${item.chapterId}`)}
-								class="min-w-0 flex-1"
-							>
-								<h4
-									class="truncate text-sm font-semibold text-[var(--text-primary)] hover:text-[var(--accent)]"
-								>
-									{item.mangaTitle ?? item.mangaId}
-								</h4>
-								<p class="mt-0.5 truncate text-xs text-[var(--text-muted)]">
-									{item.chapter ? `Cap. ${item.chapter}` : (item.title ?? 'Capítulo')} ·
-									{item.pageCount} pág. · {formatBytes(item.sizeBytes)} · {item.source}
-								</p>
-							</a>
-							<button
-								onclick={() => removeDownload(item)}
-								title="Apagar download"
-								class="flex-shrink-0 p-2 text-[var(--text-muted)] transition-colors hover:text-[var(--accent)]"
-							>
-								<Trash2 class="h-4 w-4" aria-hidden="true" />
-							</button>
-						</div>
-					{/each}
-				</div>
-			{/if}
-		</section>
-
-		<!-- Armazenamento -->
-		<section aria-labelledby="storage-heading">
-			<div id="storage-heading">
-				{@render sectionHead(Database, 'Armazenamento')}
-			</div>
-			<p class="-mt-3 mb-6 text-sm text-[var(--text-secondary)]">
-				Dados salvos localmente no seu dispositivo.
-			</p>
-
-			<div class="card flex items-center justify-between p-6">
-				<div>
-					<p class="text-sm font-semibold text-[var(--text-primary)]">Limpar biblioteca</p>
-					<p class="mt-0.5 text-xs text-[var(--text-muted)]">
-						{mangaStore.library.length} mangá{mangaStore.library.length !== 1 ? 's' : ''} na biblioteca.
-						{confirmClear
-							? 'Clique novamente para confirmar.'
-							: 'Remove todos os mangás e o progresso.'}
-					</p>
-				</div>
-				<button
-					onclick={handleClearAll}
-					disabled={mangaStore.library.length === 0}
-					class={[
-						'flex-shrink-0 border px-3.5 py-2 text-[0.625rem] font-bold tracking-[0.14em] uppercase transition-all',
-						confirmClear
-							? 'animate-pulse border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]'
-							: 'border-[var(--accent)]/30 text-[var(--accent)] hover:bg-[var(--accent)]/10 disabled:cursor-not-allowed disabled:opacity-30'
-					].join(' ')}
-				>
-					{confirmClear ? 'Confirmar' : 'Limpar tudo'}
+						<span>PALETA JAPONESA</span>
+						<span>HIRAKU</span>
+					</div>
 				</button>
-			</div>
-		</section>
+			{/each}
+		</div>
+	</section>
 
-		<!-- Privacidade -->
-		<section aria-labelledby="privacy-heading">
-			<div id="privacy-heading">
-				{@render sectionHead(Shield, 'Privacidade')}
-			</div>
-			<div class="registration border border-[var(--accent)]/25 bg-[var(--accent)]/5 p-6">
-				<p class="text-sm leading-relaxed text-[var(--text-secondary)]">
-					O <strong class="text-[var(--accent)]">Hiraku</strong> guarda sua biblioteca, seu progresso
-					e os capítulos baixados apenas no seu dispositivo. O servidor é usado somente para consultar
-					as fontes e servir as imagens. Não coletamos dados de uso.
+	<!-- Modo Padrão do Leitor -->
+	<section class="space-y-4">
+		<div class="flex items-center gap-2 border-b border-[var(--rule)] pb-2">
+			<span class="hanko text-xs">読法</span>
+			<h2 class="font-mono text-sm font-bold tracking-wider text-[var(--text-primary)] uppercase">
+				Direção e Motor de Leitura
+			</h2>
+		</div>
+
+		<div class="grid gap-4 sm:grid-cols-2">
+			{#each readingModes as mode (mode.id)}
+				<button
+					type="button"
+					onclick={() => preferences.setReadingMode(mode.id)}
+					class={cn(
+						'registration border p-4 text-left transition-all',
+						preferences.readingMode === mode.id
+							? 'border-[var(--accent)] bg-[var(--bg-secondary)]'
+							: 'border-[var(--rule)] bg-[var(--bg-primary)] opacity-70 hover:opacity-100'
+					)}
+				>
+					<div class="flex items-center justify-between">
+						<span class="hanko text-[0.5625rem]">{mode.kanji}</span>
+						{#if preferences.readingMode === mode.id}
+							<span class="font-mono text-[0.625rem] font-bold text-[var(--accent)] uppercase">
+								PADRÃO
+							</span>
+						{/if}
+					</div>
+
+					<h3 class="mt-2 font-serif text-sm font-black text-[var(--text-primary)] uppercase">
+						{mode.name}
+					</h3>
+					<p class="mt-1 font-mono text-xs text-[var(--text-muted)]">
+						{mode.desc}
+					</p>
+				</button>
+			{/each}
+		</div>
+	</section>
+
+	<!-- Zona de Gerenciamento de Armazenamento e Limpeza -->
+	<section class="space-y-4 pt-6">
+		<div class="flex items-center gap-2 border-b border-[var(--rule)] pb-2">
+			<span class="hanko text-xs">管理</span>
+			<h2 class="font-mono text-sm font-bold tracking-wider text-[var(--text-primary)] uppercase">
+				Armazenamento Local & Cache
+			</h2>
+		</div>
+
+		<div
+			class="flex flex-col gap-4 border border-[var(--rule)] bg-[var(--bg-secondary)] p-4 sm:flex-row sm:items-center sm:justify-between"
+		>
+			<div>
+				<h3 class="font-mono text-xs font-bold text-[var(--text-primary)] uppercase">
+					Limpar Todos os Dados e Biblioteca
+				</h3>
+				<p class="font-mono text-[0.6875rem] text-[var(--text-muted)]">
+					Remove todo o progresso de leitura, coleções criadas e preferências salvas no navegador.
 				</p>
 			</div>
-		</section>
 
-		<footer
-			class="mt-4 flex items-center justify-center gap-4 text-[0.625rem] font-bold tracking-[0.18em] text-[var(--text-muted)] uppercase"
-		>
-			<span>Local · v1.1</span>
-			<span aria-hidden="true">·</span>
-			<span>Construído com Svelte 5</span>
-		</footer>
-	</div>
-</main>
+			<button
+				type="button"
+				onclick={handleClearAll}
+				class={cn(
+					'btn-tactile border px-4 py-2 font-mono text-xs font-bold tracking-wider uppercase transition-colors',
+					clearConfirm
+						? 'animate-pulse border-red-600 bg-red-600 text-white'
+						: 'border-[var(--rule)] bg-[var(--bg-primary)] text-[var(--text-primary)] hover:border-red-500'
+				)}
+			>
+				{clearConfirm ? 'Confirmar Exclusão Definitiva' : 'Limpar Dados'}
+			</button>
+		</div>
+	</section>
+</div>

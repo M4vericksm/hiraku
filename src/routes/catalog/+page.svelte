@@ -1,297 +1,305 @@
 <script lang="ts">
-	import {
-		ApiError,
-		BackendApiService,
-		resolveImageUrl,
-		type GenreInfo,
-		type MangaSearchResult,
-		type SourceInfo
-	} from '$lib/services/api';
-	import { Search, Loader2, Compass, AlertTriangle, X } from 'lucide-svelte';
-	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
-	import { onMount } from 'svelte';
-	import PageHeader from '$lib/components/PageHeader.svelte';
 	import VolumeCard from '$lib/components/VolumeCard.svelte';
 	import VolumeGridSkeleton from '$lib/components/VolumeGridSkeleton.svelte';
+	import { AlertTriangle } from 'lucide-svelte';
+	import type { Manga } from '$lib/stores/manga.svelte';
+	import { ApiError, BackendApiService, isAborted, resolveImageUrl } from '$lib/services/api';
+	import { onDestroy } from 'svelte';
 
-	let query = $state('');
-	let results = $state<MangaSearchResult[]>([]);
-	let isLoading = $state(false);
-	let error = $state<string | null>(null);
-	let hasSearched = $state(false);
+	// Obras Principais Canônicas para Exibição Inicial no Catálogo com IDs reais
+	const featuredMangas: Manga[] = [
+		{
+			id: '801513ba-a712-498c-8f57-cae55b38cc92',
+			source: 'mangadex',
+			title: 'Berserk',
+			author: 'Kentarou Miura',
+			coverUrl:
+				'https://uploads.mangadex.org/covers/801513ba-a712-498c-8f57-cae55b38cc92/81e1c82d-6672-400c-8c58-4ff9bfb89031.jpg.256.jpg',
+			description:
+				'Guts, um ex-mercenário agora conhecido como o Espadachim Negro, busca vingança contra as forças demoníacas.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['seinen', 'action', 'supernatural', 'drama', 'horror']
+		},
+		{
+			id: 'a1c7c817-4e59-43b7-9365-09675a149a6f',
+			source: 'mangadex',
+			title: 'One Piece',
+			author: 'Eiichiro Oda',
+			coverUrl:
+				'https://uploads.mangadex.org/covers/a1c7c817-4e59-43b7-9365-09675a149a6f/2f4aca53-64c7-46ac-ae85-3bc9b3169890.png.256.jpg',
+			description:
+				'Monkey D. Luffy se recusa a deixar qualquer um ficar em seu caminho para se tornar o Rei dos Piratas.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['shonen', 'action', 'adventure', 'fantasy', 'comedy']
+		},
+		{
+			id: 'a77742b1-befd-49a4-bff5-1ad4e6b0ef7b',
+			source: 'mangadex',
+			title: 'Chainsaw Man',
+			author: 'Tatsuki Fujimoto',
+			coverUrl:
+				'https://uploads.mangadex.org/covers/a77742b1-befd-49a4-bff5-1ad4e6b0ef7b/6e518bd1-5f60-446b-8832-bfe6bf74834b.jpg.256.jpg',
+			description:
+				'Denji tinha um sonho simples: viver uma vida feliz e pacífica com sua parceira Pochita.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['shonen', 'action', 'supernatural', 'horror', 'demons']
+		},
+		{
+			id: 'd1a9fdeb-f713-407f-960c-8326b586e6fd',
+			source: 'mangadex',
+			title: 'Vagabond',
+			author: 'Takehiko Inoue',
+			coverUrl:
+				'https://uploads.mangadex.org/covers/d1a9fdeb-f713-407f-960c-8326b586e6fd/05f8dcb4-8ea1-48db-a0b1-3a8fbf695e5a.jpg.256.jpg',
+			description:
+				'No Japão do século XVI, Shinmen Takezou é um jovem selvagem e agressivo que se tornará o lendário Miyamoto Musashi.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['seinen', 'action', 'historical', 'drama', 'martial-arts']
+		},
+		{
+			id: '5d1fc77e-706a-4fc5-bea8-486c9be0145d',
+			source: 'mangadex',
+			title: 'Vinland Saga',
+			author: 'Makoto Yukimura',
+			coverUrl:
+				'https://uploads.mangadex.org/covers/5d1fc77e-706a-4fc5-bea8-486c9be0145d/7fa60f5d-285a-40c5-8a1d-9cf375eaf897.jpg.256.jpg',
+			description:
+				'Thorfinn, filho de um dos maiores guerreiros vikings, cresce entre mercenários jurando vingança.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['seinen', 'action', 'historical', 'adventure', 'drama']
+		},
+		{
+			id: '4301d363-ee02-43f4-ae24-4cbf29a74830',
+			source: 'mangadex',
+			title: 'Oyasumi Punpun',
+			author: 'Inio Asano',
+			coverUrl:
+				'https://uploads.mangadex.org/covers/4301d363-ee02-43f4-ae24-4cbf29a74830/0295431e-ccb9-4599-900f-0a1bc7380561.jpg.256.jpg',
+			description:
+				'Punpun Onodera é um garoto comum vivendo no Japão com sua visão do mundo em constante transformação.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['seinen', 'psychological', 'slice-of-life', 'drama']
+		},
+		{
+			id: '6b1eb93e-473a-4ab3-9922-1a66d2a29a4a',
+			source: 'mangadex',
+			title: 'Naruto',
+			author: 'Masashi Kishimoto',
+			coverUrl:
+				'https://uploads.mangadex.org/covers/6b1eb93e-473a-4ab3-9922-1a66d2a29a4a/c5a3090c-4ca0-40a2-9102-e0ee0c6dac15.jpg.256.jpg',
+			description:
+				'Naruto Uzumaki é um jovem ninja hiperativo que busca reconhecimento e sonha em se tornar Hokage.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['shonen', 'action', 'adventure', 'fantasy', 'martial-arts']
+		},
+		{
+			id: 'solo-leveling',
+			source: 'mangalivre',
+			title: 'Solo Leveling',
+			author: 'Chugong',
+			coverUrl: resolveImageUrl(
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FSolo-Leveling-193x278.webp'
+			),
+			description:
+				'Conhecido como o caçador mais fraco de toda a humanidade, Sung Jin-Woo luta pela sobrevivência em masmorras mortais.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['action', 'adventure', 'fantasy']
+		}
+	];
 
-	let sources = $state<SourceInfo[]>([]);
-	// String vazia = "Todas as fontes". E o padrao: nunca pre-seleciona uma fonte
-	// especifica, senao o usuario perde resultados das outras sem perceber.
-	let selectedSource = $state<string>('');
-
-	let genres = $state<GenreInfo[]>([]);
-	// Slugs marcados no filtro. Um resultado precisa ter TODOS eles.
-	let selectedGenres = $state<string[]>([]);
-	let genreMenuOpen = $state(false);
-
-	// Uma vez na montagem — em $effect isso reagiria a `sources`/`selectedSource`
-	// e refazia a chamada em loop.
-	onMount(() => {
-		BackendApiService.getSources()
-			.then((res) => {
-				sources = res;
-			})
-			.catch((err) => {
-				console.error(err);
-				error =
-					err instanceof ApiError
-						? err.message
-						: 'Falha ao carregar as fontes. O backend está rodando?';
-			});
-
-		BackendApiService.getGenres()
-			.then((res) => {
-				genres = res;
-			})
-			// Sem a lista o filtro some, mas a busca continua funcionando.
-			.catch((err) => console.error('Falha ao carregar gêneros', err));
-
-		// Chegou de um chip de genero na pagina do manga.
-		const fromUrl = page.url.searchParams.get('genre');
-		if (fromUrl) selectedGenres = [fromUrl];
-	});
-
-	const genreLabels = $derived(Object.fromEntries(genres.map((g) => [g.slug, g.label])));
-
-	function toggleGenre(slug: string) {
-		selectedGenres = selectedGenres.includes(slug)
-			? selectedGenres.filter((s) => s !== slug)
-			: [...selectedGenres, slug];
-	}
+	let searchQuery = $state('');
+	let isSearching = $state(false);
+	let searchError = $state<string | null>(null);
+	let results = $state<Manga[]>(featuredMangas);
 
 	/**
-	 * Filtro aplicado no cliente sobre o que a busca devolveu.
-	 *
-	 * As fontes nao aceitam filtro de genero na query de busca, e varias nem
-	 * mandam genero no resultado — por isso o filtro so esconde quem declara
-	 * generos e nao bate. Um resultado sem genero nenhum continua visivel, senao
-	 * o MangaLivre (que so devolve titulo e capa na busca) sumiria inteiro.
+	 * Cancela a busca anterior quando uma nova comeca. Sem isso, duas buscas em
+	 * voo podiam terminar fora de ordem e a mais antiga sobrescrevia a mais
+	 * recente na tela.
 	 */
-	const visibleResults = $derived(
-		selectedGenres.length === 0
-			? results
-			: results.filter((r) => {
-					const own = r.genres ?? [];
-					if (own.length === 0) return true;
-					return selectedGenres.every((slug) => own.includes(slug));
-				})
-	);
+	let inFlight: AbortController | null = null;
 
-	async function performSearch(e: Event) {
-		e.preventDefault();
-		if (!query || query.trim().length < 2) return;
+	onDestroy(() => inFlight?.abort());
 
-		isLoading = true;
-		error = null;
-		hasSearched = true;
+	async function handleSearch(e?: SubmitEvent) {
+		if (e) e.preventDefault();
+		const query = searchQuery.trim();
 
-		try {
-			results = await BackendApiService.search(query.trim(), selectedSource || undefined);
-		} catch (err) {
-			console.error(err);
-			results = [];
-			error =
-				err instanceof ApiError
-					? err.message
-					: 'Falha ao buscar mangás. Verifique se o backend está rodando.';
-		} finally {
-			isLoading = false;
+		inFlight?.abort();
+
+		if (!query) {
+			inFlight = null;
+			searchError = null;
+			results = featuredMangas;
+			return;
 		}
-	}
 
-	function sourceName(id: string): string {
-		return sources.find((s) => s.id === id)?.name ?? id;
+		const controller = new AbortController();
+		inFlight = controller;
+
+		isSearching = true;
+		searchError = null;
+		try {
+			// Sem filtro de fonte: o backend agrega todas e ja intercala por fonte.
+			const data = await BackendApiService.search(query, undefined, controller.signal);
+			results = data.map((item) => ({
+				id: item.source_id,
+				source: item.source,
+				title: item.title,
+				author: item.alt_titles?.[0] || '',
+				coverUrl: resolveImageUrl(item.cover_url),
+				description: item.description,
+				progress: 0,
+				lastReadPage: 0,
+				totalPage: 0,
+				addedAt: new Date().toISOString(),
+				genres: item.genres || []
+			}));
+		} catch (err) {
+			// Cancelamento e decisao nossa, nao falha: a busca seguinte manda.
+			if (isAborted(err)) return;
+			console.error('Falha ao buscar mangás:', err);
+			searchError =
+				err instanceof ApiError ? err.message : 'Não foi possível buscar. Tente de novo.';
+			results = [];
+		} finally {
+			if (inFlight === controller) {
+				inFlight = null;
+				isSearching = false;
+			}
+		}
 	}
 </script>
 
-<main class="mx-auto max-w-[100rem] px-6 py-10 pb-28 md:px-10 md:py-14 xl:pb-14">
-	<PageHeader
-		kicker="Fontes externas · {sources.length || '—'} disponíve{sources.length === 1 ? 'l' : 'is'}"
-		title="Catálogo"
-		furigana="さがす"
-		lede="Busque um título nas fontes conectadas e adicione à sua estante em um toque."
-	>
-		{#snippet aside()}
-			<form onsubmit={performSearch} class="flex w-full items-end gap-4 lg:w-auto">
-				<div class="group relative flex-1 lg:w-72">
-					<label for="catalog-search" class="kicker mb-1.5 block">Buscar</label>
-					<div
-						class="flex items-center gap-2 border-b border-[var(--rule)] focus-within:border-[var(--accent)]"
-					>
-						<Search
-							class="h-4 w-4 flex-shrink-0 text-[var(--text-muted)] transition-colors group-focus-within:text-[var(--accent)]"
-							aria-hidden="true"
-						/>
-						<input
-							id="catalog-search"
-							type="search"
-							bind:value={query}
-							placeholder="Título…"
-							class="w-full border-0 bg-transparent py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
-						/>
-					</div>
-				</div>
+<svelte:head>
+	<title>Catálogo • Hiraku</title>
+</svelte:head>
 
-				<div class="w-36">
-					<label for="catalog-source" class="kicker mb-1.5 block">Fonte</label>
-					<select id="catalog-source" bind:value={selectedSource} class="select">
-						<option value="">Todas</option>
-						{#each sources as source (source.id)}
-							<option value={source.id}>{source.name}</option>
-						{/each}
-					</select>
-				</div>
-
-				<button type="submit" disabled={isLoading} class="btn-primary flex-shrink-0">
-					{#if isLoading}
-						<Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
-					{:else}
-						<Search class="h-4 w-4" aria-hidden="true" />
-					{/if}
-					<span class="hidden sm:inline">Buscar</span>
-				</button>
-			</form>
-		{/snippet}
-	</PageHeader>
-
-	<!-- Filtro de categorias -->
-	{#if genres.length > 0}
-		<div class="mb-8">
-			<div class="mb-3 flex flex-wrap items-center gap-3">
-				<button
-					type="button"
-					onclick={() => (genreMenuOpen = !genreMenuOpen)}
-					class="rounded-xl border-2 border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-2 text-sm font-bold transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+<div class="space-y-8">
+	<!-- Cabeçalho Limpo e Direto -->
+	<header class="border-b border-[var(--rule)] pt-2 pb-6">
+		<div class="flex items-center justify-between">
+			<div class="flex items-center gap-3">
+				<span class="hanko text-xs">目録</span>
+				<h1
+					class="font-serif text-3xl font-black tracking-tight text-[var(--text-primary)] uppercase sm:text-4xl"
 				>
-					Categorias{selectedGenres.length > 0 ? ` (${selectedGenres.length})` : ''}
-				</button>
+					Catálogo
+				</h1>
+			</div>
+			<span class="font-mono text-xs text-[var(--text-muted)]">
+				{results.length}
+				{results.length === 1 ? 'obra' : 'obras'}
+			</span>
+		</div>
 
-				{#each selectedGenres as slug (slug)}
+		<!-- Formulário de Busca Simples -->
+		<form onsubmit={handleSearch} class="mt-6 flex flex-col gap-3 sm:flex-row">
+			<div class="relative flex-1">
+				<input
+					type="search"
+					bind:value={searchQuery}
+					placeholder="Buscar por título ou autor..."
+					class="w-full border border-[var(--rule)] bg-[var(--bg-secondary)] px-4 py-3 font-mono text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none focus:border-[var(--accent)]"
+				/>
+				{#if searchQuery}
 					<button
 						type="button"
-						onclick={() => toggleGenre(slug)}
-						class="flex items-center gap-1.5 rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-bold text-[var(--accent-foreground)]"
-						title="Remover filtro"
-					>
-						{genreLabels[slug] ?? slug}
-						<X class="h-3 w-3" />
-					</button>
-				{/each}
-
-				{#if selectedGenres.length > 0}
-					<button
-						type="button"
-						onclick={() => (selectedGenres = [])}
-						class="text-xs font-bold text-[var(--text-muted)] underline transition-colors hover:text-[var(--accent)]"
+						onclick={() => {
+							searchQuery = '';
+							handleSearch();
+						}}
+						class="absolute top-1/2 right-3 -translate-y-1/2 font-mono text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
 					>
 						Limpar
 					</button>
 				{/if}
 			</div>
 
-			{#if genreMenuOpen}
-				<div
-					class="flex flex-wrap gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4"
-				>
-					{#each genres as genre (genre.slug)}
-						<button
-							type="button"
-							onclick={() => toggleGenre(genre.slug)}
-							class={[
-								'rounded-full border px-3 py-1.5 text-xs font-bold transition-colors',
-								selectedGenres.includes(genre.slug)
-									? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-foreground)]'
-									: 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
-							].join(' ')}
-						>
-							{genre.label}
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	{#if error}
-		<div
-			class="registration mb-10 flex items-start gap-3 border border-[var(--accent)]/40 bg-[var(--accent)]/5 px-5 py-4"
-		>
-			<AlertTriangle class="mt-0.5 h-4 w-4 flex-shrink-0 text-[var(--accent)]" aria-hidden="true" />
-			<p class="text-sm text-[var(--text-secondary)]">{error}</p>
-		</div>
-	{/if}
-
-	{#if isLoading}
-		<VolumeGridSkeleton count={10} />
-	{:else if visibleResults.length > 0}
-		<section aria-labelledby="resultados">
-			<div class="mb-5 flex items-baseline justify-between border-b border-[var(--border)] pb-3">
-				<h2 id="resultados" class="text-lg tracking-wide text-[var(--text-primary)] uppercase">
-					Resultados
-				</h2>
-				<span class="kicker tabular">
-					{visibleResults.length} título{visibleResults.length === 1 ? '' : 's'}
-				</span>
-			</div>
-
-			<div
-				class="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+			<button
+				type="submit"
+				disabled={isSearching}
+				class="btn-tactile flex items-center justify-center gap-2 border border-[var(--accent)] bg-[var(--accent)] px-8 py-3 text-xs font-bold tracking-wider text-[var(--bg-primary)] uppercase disabled:opacity-50"
 			>
-				{#each visibleResults as result, i (result.source + result.source_id)}
-					<VolumeCard
-						href={resolve(`/manga/${result.source}/${result.source_id}`)}
-						title={result.title}
-						coverUrl={resolveImageUrl(result.cover_url)}
-						footnote={sourceName(result.source)}
-						action="Ver detalhes"
-						eager={i < 6}
-					/>
+				{#if isSearching}
+					<span>Buscando...</span>
+				{:else}
+					<span>Buscar</span>
+				{/if}
+			</button>
+		</form>
+	</header>
+
+	<!-- Resultados / Obras em Destaque -->
+	<main>
+		{#if isSearching}
+			<!-- Skeleton no lugar dos resultados antigos: sem isso a grade anterior
+			     ficava na tela durante a busca e parecia que nada aconteceu. -->
+			<VolumeGridSkeleton count={12} />
+		{:else if searchError}
+			<div
+				class="registration my-8 flex items-start gap-3 border border-[var(--accent)] bg-[var(--accent)]/10 p-6"
+			>
+				<AlertTriangle class="mt-0.5 h-5 w-5 shrink-0 text-[var(--accent)]" />
+				<div class="space-y-3">
+					<p class="text-sm text-[var(--text-primary)]">{searchError}</p>
+					<button
+						type="button"
+						onclick={() => handleSearch()}
+						class="btn-tactile border border-[var(--accent)] bg-[var(--accent)] px-4 py-2 font-mono text-xs font-bold text-[var(--bg-primary)] uppercase"
+					>
+						Tentar de novo
+					</button>
+				</div>
+			</div>
+		{:else if results.length > 0}
+			<div
+				class="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+			>
+				{#each results as manga (`${manga.source}:${manga.id}`)}
+					<VolumeCard entry={manga} />
 				{/each}
 			</div>
-		</section>
-	{:else if results.length > 0}
-		<!-- Houve resultados, mas o filtro de generos zerou a lista: e um estado
-		     diferente de "a busca nao achou nada" e pede outra saida. -->
-		<div class="registration halftone border border-[var(--rule)] px-6 py-20 text-center">
-			<p class="kicker mb-5">Filtro sem correspondência</p>
-			<h2 class="masthead mx-auto max-w-xl text-balance text-[var(--text-primary)]">
-				Nenhum resultado com as categorias selecionadas
-			</h2>
-			<p class="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-[var(--text-secondary)]">
-				Remova alguma categoria para ver os {results.length} título{results.length === 1 ? '' : 's'} encontrado{results.length ===
-				1
-					? ''
-					: 's'}.
-			</p>
-		</div>
-	{:else if hasSearched && !error}
-		<div class="registration halftone border border-[var(--rule)] px-6 py-20 text-center">
-			<p class="kicker mb-5">Sem correspondência</p>
-			<h2 class="masthead mx-auto max-w-xl text-balance text-[var(--text-primary)]">
-				Nada encontrado para "{query}"
-			</h2>
-			<p class="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-[var(--text-secondary)]">
-				Tente outro termo ou troque a fonte selecionada.
-			</p>
-		</div>
-	{:else}
-		<div
-			class="registration halftone border border-dashed border-[var(--rule)] px-6 py-20 text-center"
-		>
-			<Compass class="mx-auto mb-5 h-8 w-8 text-[var(--text-muted)]" aria-hidden="true" />
-			<h2 class="masthead mx-auto max-w-xl text-balance text-[var(--text-primary)]">
-				O que você quer ler hoje?
-			</h2>
-			<p class="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-[var(--text-secondary)]">
-				Digite um título acima para buscar nas fontes conectadas.
-			</p>
-		</div>
-	{/if}
-</main>
+		{:else}
+			<div
+				class="registration halftone my-8 border border-[var(--rule)] bg-[var(--bg-secondary)] p-8 text-center sm:p-12"
+			>
+				<div class="mx-auto max-w-sm space-y-3">
+					<span class="hanko mx-auto block w-fit text-sm">無</span>
+					<h3
+						class="font-serif text-lg font-black tracking-tight text-[var(--text-primary)] uppercase"
+					>
+						Nenhuma Obra Encontrada
+					</h3>
+					<p class="font-mono text-xs text-[var(--text-muted)]">
+						Nenhuma das fontes tem esse título. Tente outro termo ou limpe a busca.
+					</p>
+				</div>
+			</div>
+		{/if}
+	</main>
+</div>

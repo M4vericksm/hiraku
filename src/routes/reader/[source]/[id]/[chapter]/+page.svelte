@@ -5,12 +5,11 @@
 	import { mangaStore } from '$lib/stores/manga.svelte';
 	import { ApiError, BackendApiService, resolveImageUrl, type Chapter } from '$lib/services/api';
 	import { offlineService } from '$lib/services/offline';
-	import { preferences, type ReadingMode } from '$lib/stores/preferences.svelte';
+	import { preferences, SCROLL_SPEEDS, type ReadingMode } from '$lib/stores/preferences.svelte';
 	import { pushBackHandler } from '$lib/services/backButton';
 	import {
 		ArrowLeft,
 		Menu,
-		Settings,
 		ChevronLeft,
 		ChevronRight,
 		Maximize2,
@@ -20,8 +19,9 @@
 		AlertCircle,
 		ZoomIn,
 		ZoomOut,
-		WifiOff,
-		List
+		Play,
+		Pause,
+		FastForward
 	} from 'lucide-svelte';
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { cn } from '$lib/utils';
@@ -38,14 +38,16 @@
 	let isControlsVisible = $state(true);
 	let isLoading = $state(true);
 	let error = $state<string | null>(null);
-	// Modo de leitura vem das preferencias: escolher "Scroll" uma vez vale para
-	// os proximos capitulos tambem.
 	const readingMode = $derived(preferences.readingMode);
 	let sidebarOpen = $state(false);
 	let sidebarTab = $state<'chapters' | 'settings'>('chapters');
 	let isFullscreen = $state(false);
 
-	// Lista de capitulos, usada para navegar entre eles sem sair do leitor.
+	// Estado do Auto-Scroll
+	let isAutoScrolling = $state(false);
+	let autoScrollAnimationId: number | null = null;
+	let autoScrollIntervalId: ReturnType<typeof setInterval> | null = null;
+
 	let chapters = $state<Chapter[]>([]);
 	const chapterIndex = $derived(chapters.findIndex((c) => c.source_id === chapterId));
 	const prevChapter = $derived(chapterIndex > 0 ? chapters[chapterIndex - 1] : null);
@@ -72,19 +74,11 @@
 	let touchStartX = 0;
 	let touchStartY = 0;
 
-	const READING_MODES: { value: ReadingMode; label: string }[] = [
-		{ value: 'rtl', label: 'Paginado' },
-		{ value: 'vertical', label: 'Scroll' }
+	const READING_MODES: { value: ReadingMode; label: string; kanji: string }[] = [
+		{ value: 'rtl', label: 'Paginado (RTL Mangá)', kanji: '頁' },
+		{ value: 'vertical', label: 'Scroll Contínuo', kanji: '巻' }
 	];
 
-	/**
-	 * Object URLs precisam ser revogados na troca de capitulo, senao vazam memoria.
-	 *
-	 * Le o estado com `untrack`: chamado de dentro do $effect de carga, uma
-	 * leitura rastreada de `pageUrls`/`isOfflineSource` vira dependencia do
-	 * proprio effect que as escreve — o effect reexecutava e revogava as blob
-	 * URLs que tinham acabado de ser criadas, e o capitulo baixado nao abria mais.
-	 */
 	function releasePages() {
 		untrack(() => {
 			if (isOfflineSource) offlineService.revokePages(pageUrls);
@@ -92,11 +86,6 @@
 		pageUrls = [];
 	}
 
-	/**
-	 * Cada carga recebe um token; respostas de uma carga antiga sao descartadas.
-	 * Sem isso, trocar de capitulo rapido deixava as paginas do capitulo anterior
-	 * sobrescreverem as do atual.
-	 */
 	let loadToken = 0;
 
 	async function loadChapter(currentSource: string, mangaId: string, currentChapterId: string) {
@@ -105,6 +94,7 @@
 		isLoading = true;
 		error = null;
 		currentPage = 1;
+		isAutoScrolling = false;
 
 		try {
 			const downloaded = await offlineService.isChapterDownloaded(
@@ -127,7 +117,6 @@
 				offline = false;
 			}
 
-			// Carga obsoleta: descarta e devolve os blobs que criamos por nada.
 			if (token !== loadToken) {
 				if (offline) offlineService.revokePages(urls);
 				return;
@@ -141,8 +130,6 @@
 				return;
 			}
 
-			// Retoma na pagina salva quando o progresso e deste capitulo; senao
-			// abrir o capitulo de novo jogava a leitura de volta para a pagina 1.
 			const saved = untrack(() => mangaStore.find(mangaId, currentSource));
 			const resumePage =
 				saved?.lastChapterId === currentChapterId
@@ -171,7 +158,6 @@
 		loadChapter(currentSource, mangaId, currentChapterId);
 	});
 
-	// Lista de capitulos é independente das paginas: carrega uma vez por mangá.
 	$effect(() => {
 		const currentSource = source;
 		const mangaId = id;
@@ -182,22 +168,104 @@
 			.catch((err) => console.error('Falha ao carregar lista de capítulos', err));
 	});
 
-	// Mantem o rotulo do capitulo na biblioteca assim que ele é conhecido.
 	$effect(() => {
 		if (chapterLabel && manga) {
 			mangaStore.updateMeta(id, source, { lastChapterLabel: chapterLabel });
 		}
 	});
 
+	// Motor Reativo de Auto-Scroll
+	$effect(() => {
+		if (!isAutoScrolling || isLoading || !!error || pageUrls.length === 0) {
+			if (autoScrollAnimationId) {
+				cancelAnimationFrame(autoScrollAnimationId);
+				autoScrollAnimationId = null;
+			}
+			if (autoScrollIntervalId) {
+				clearInterval(autoScrollIntervalId);
+				autoScrollIntervalId = null;
+			}
+			return;
+		}
+
+		if (readingMode === 'vertical') {
+			let lastTimestamp = performance.now();
+			const scrollStep = (now: number) => {
+				const delta = (now - lastTimestamp) / 1000;
+				lastTimestamp = now;
+				if (verticalContainer) {
+					const speed = preferences.scrollSpeed.pixelsPerSecond;
+					verticalContainer.scrollTop += speed * delta;
+
+					// Se chegou ao fim do container vertical
+					const atBottom =
+						verticalContainer.scrollHeight -
+							verticalContainer.scrollTop -
+							verticalContainer.clientHeight <=
+						2;
+					if (atBottom) {
+						isAutoScrolling = false;
+						if (nextChapter) {
+							goToChapter(nextChapter);
+						}
+						return;
+					}
+				}
+
+				if (isAutoScrolling) {
+					autoScrollAnimationId = requestAnimationFrame(scrollStep);
+				}
+			};
+
+			autoScrollAnimationId = requestAnimationFrame(scrollStep);
+		} else {
+			const intervalMs = preferences.scrollSpeed.secondsPerPage * 1000;
+			autoScrollIntervalId = setInterval(() => {
+				if (currentPage < pageUrls.length) {
+					setPage(currentPage + 1);
+				} else if (nextChapter) {
+					goToChapter(nextChapter);
+				} else {
+					isAutoScrolling = false;
+				}
+			}, intervalMs);
+		}
+
+		return () => {
+			if (autoScrollAnimationId) {
+				cancelAnimationFrame(autoScrollAnimationId);
+				autoScrollAnimationId = null;
+			}
+			if (autoScrollIntervalId) {
+				clearInterval(autoScrollIntervalId);
+				autoScrollIntervalId = null;
+			}
+		};
+	});
+
+	function toggleAutoScroll() {
+		isAutoScrolling = !isAutoScrolling;
+		if (isAutoScrolling) {
+			resetControlsTimeout();
+		}
+	}
+
+	function cycleAutoScrollSpeed() {
+		const current = preferences.autoScrollSpeedLevel;
+		const next = current >= SCROLL_SPEEDS.length ? 1 : current + 1;
+		preferences.setAutoScrollSpeedLevel(next);
+	}
+
 	function goToChapter(target: Chapter | null) {
 		if (!target) return;
 		sidebarOpen = false;
-		goto(resolve(`/reader/${source}/${id}/${target.source_id}`));
+		isAutoScrolling = false;
+		goto(resolve('/reader/[source]/[id]/[chapter]', { source, id, chapter: target.source_id }));
 	}
 
 	function resetControlsTimeout() {
 		clearTimeout(controlsTimeout);
-		if (isControlsVisible && !sidebarOpen) {
+		if (isControlsVisible && !sidebarOpen && !isAutoScrolling) {
 			controlsTimeout = setTimeout(() => {
 				isControlsVisible = false;
 			}, 3000);
@@ -218,7 +286,6 @@
 		currentPage = value;
 		mangaStore.updateProgress(id, source, value, pageUrls.length, { id: chapterId });
 
-		// Ultima pagina alcancada: capitulo conta como lido.
 		if (value >= pageUrls.length) {
 			mangaStore.markChapterRead(id, source, chapterId);
 		}
@@ -242,7 +309,6 @@
 		}
 	}
 
-	// Toque/clique/seta do lado direito ou esquerdo, respeitando o sentido de leitura.
 	function pageRight() {
 		if (readingMode === 'rtl') prev();
 		else next();
@@ -258,6 +324,9 @@
 			pageRight();
 		} else if (e.key === 'ArrowLeft') {
 			pageLeft();
+		} else if (e.key === ' ' || e.key === 'Spacebar') {
+			e.preventDefault();
+			toggleAutoScroll();
 		} else if (e.key === 'f') {
 			toggleFullscreen();
 		} else if (e.key === 'Escape') {
@@ -347,8 +416,6 @@
 		document.addEventListener('fullscreenchange', handleFullscreenChange);
 		resetControlsTimeout();
 
-		// No leitor o "voltar" fecha primeiro o que estiver por cima; so depois
-		// deixa o layout tratar a navegacao.
 		releaseBackHandler = pushBackHandler(() => {
 			if (sidebarOpen) {
 				sidebarOpen = false;
@@ -364,6 +431,8 @@
 
 	onDestroy(() => {
 		clearTimeout(controlsTimeout);
+		if (autoScrollAnimationId) cancelAnimationFrame(autoScrollAnimationId);
+		if (autoScrollIntervalId) clearInterval(autoScrollIntervalId);
 		if (typeof document !== 'undefined') {
 			document.removeEventListener('fullscreenchange', handleFullscreenChange);
 		}
@@ -374,8 +443,6 @@
 	function handleVerticalScroll(e: Event) {
 		if (pageUrls.length === 0) return;
 		const target = e.target as HTMLElement;
-		// `[data-page]` e nao `img`: paginas faltando num capitulo parcial viram
-		// placeholder e o indice do `img` deixaria de bater com o numero da pagina.
 		const slots = target.querySelectorAll<HTMLElement>('[data-page]');
 		const middle = window.innerHeight / 2;
 
@@ -389,13 +456,6 @@
 		}
 	}
 
-	/**
-	 * Retoma a leitura onde parou, no modo scroll.
-	 *
-	 * So dispara uma vez por capitulo (`restoredFor`): depois disso quem manda na
-	 * posicao e o usuario, e rolar de volta ao ponto salvo a cada re-render
-	 * prenderia a tela.
-	 */
 	let restoredFor = $state<string | null>(null);
 
 	$effect(() => {
@@ -408,13 +468,11 @@
 
 		restoredFor = currentChapterId;
 
-		// So retoma se o progresso salvo for deste capitulo.
 		const saved = untrack(() => manga);
 		if (saved?.lastChapterId !== currentChapterId) return;
 		const targetPage = saved.lastReadPage;
 		if (!targetPage || targetPage <= 1) return;
 
-		// Espera o layout assentar antes de medir a posicao do alvo.
 		requestAnimationFrame(() => {
 			const slot = container.querySelector<HTMLElement>(`[data-page="${targetPage}"]`);
 			slot?.scrollIntoView({ block: 'start' });
@@ -424,120 +482,183 @@
 
 <svelte:window onkeydown={handleKeyDown} onmousemove={handleMouseMove} />
 
-<div class="fixed inset-0 overflow-hidden bg-black select-none">
+<div class="fixed inset-0 overflow-hidden bg-black font-sans select-none">
 	{#if isLoading}
 		<div class="flex h-full flex-col items-center justify-center gap-5 text-white">
-			<Loader2 class="h-10 w-10 animate-spin text-[var(--accent)]" aria-hidden="true" />
-			<p class="kicker text-white/70">Carregando capítulo</p>
+			<div class="registration border border-[var(--accent)] bg-black p-6">
+				<Loader2 class="h-10 w-10 animate-spin text-[var(--accent)]" />
+			</div>
+			<div class="flex items-center gap-2">
+				<span class="hanko text-[0.5rem]">読込中</span>
+				<p class="text-xs font-extrabold tracking-[0.2em] text-white/80 uppercase">
+					Carregando Páginas
+				</p>
+			</div>
 		</div>
 	{:else if error}
 		<div class="flex h-full flex-col items-center justify-center p-6 text-center text-white">
-			<div class="registration mb-6 border border-[var(--accent)] p-6">
-				<AlertCircle class="h-10 w-10 text-[var(--accent)]" aria-hidden="true" />
+			<div class="registration mb-6 border border-[var(--accent)] bg-black p-6 shadow-2xl">
+				<AlertCircle class="h-10 w-10 text-[var(--accent)]" />
 			</div>
-			<p class="kicker mb-3 text-white/50">Erro de leitura</p>
-			<h2 class="masthead mb-4 text-balance" style="font-size:clamp(1.75rem, 5vw, 2.75rem)">
-				Não deu pra abrir
-			</h2>
-			<p class="mb-8 max-w-sm text-sm text-white/70">{error}</p>
-			<a href={resolve(`/manga/${source}/${id}`)} class="btn-primary">Voltar ao mangá</a>
+			<span class="hanko mb-2 text-xs">エラー</span>
+			<h2 class="masthead mb-2 text-3xl text-white sm:text-4xl">Falha na Leitura</h2>
+			<p class="mb-6 max-w-sm text-xs text-white/70">{error}</p>
+			<a
+				href={resolve('/manga/[source]/[id]', { source, id })}
+				class="border border-[var(--accent)] bg-[var(--accent)] px-6 py-2.5 text-xs font-black tracking-wider text-white uppercase shadow-lg"
+			>
+				Voltar ao Mangá
+			</a>
 		</div>
 	{:else}
-		<!-- TOP BAR -->
-		<div
+		<!-- TOP BAR EDITORIAL -->
+		<header
 			class={cn(
-				'absolute top-0 right-0 left-0 z-50 flex transform items-center justify-between bg-gradient-to-b from-black/85 to-transparent p-4 px-6 text-white transition-all duration-300',
+				'absolute top-0 right-0 left-0 z-50 flex items-center justify-between border-b border-white/10 bg-black/90 px-4 py-3 text-white backdrop-blur-md transition-all duration-300 sm:px-6',
 				isControlsVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
 			)}
 		>
 			<div class="flex min-w-0 items-center gap-4">
 				<a
-					href={resolve(`/manga/${source}/${id}`)}
-					class="flex h-9 w-9 flex-shrink-0 items-center justify-center border border-white/15 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+					href={resolve('/manga/[source]/[id]', { source, id })}
+					class="flex h-9 w-9 items-center justify-center border border-white/20 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
 					onclick={(e) => e.stopPropagation()}
+					title="Voltar ao mangá"
 				>
-					<ArrowLeft class="h-4 w-4" aria-hidden="true" />
+					<ArrowLeft class="h-4 w-4" />
 				</a>
 				<div class="min-w-0">
-					<!-- Titulo tambem leva ao manga: no celular o alvo de toque da seta
-					     e pequeno, e é o gesto que o usuario tenta primeiro. -->
 					<a
-						href={resolve(`/manga/${source}/${id}`)}
-						class="block transition-opacity hover:opacity-80"
+						href={resolve('/manga/[source]/[id]', { source, id })}
+						class="block truncate text-xs font-bold text-white transition-colors hover:text-[var(--accent)] sm:text-sm"
 						onclick={(e) => e.stopPropagation()}
 					>
-						<h1 class="line-clamp-1 text-sm font-semibold">
-							{manga?.title ?? 'Leitura'}
-							{#if chapterLabel}
-								<span class="text-white/60">— {chapterLabel}</span>
-							{/if}
-						</h1>
+						{manga?.title ?? 'Leitor'}
+						{#if chapterLabel}
+							<span class="font-mono text-[var(--accent)]"> — {chapterLabel}</span>
+						{/if}
 					</a>
-					<p
-						class="mt-0.5 flex items-center gap-2 text-[0.625rem] font-bold tracking-[0.16em] text-white/60 uppercase"
+					<div
+						class="flex items-center gap-2 font-mono text-[0.5625rem] tracking-wider text-white/60 uppercase"
 					>
-						<span class="tabular">Pág. {currentPage}/{pageUrls.length}</span>
+						<span class="tabular font-bold">PÁG. {currentPage} / {pageUrls.length}</span>
 						{#if isOfflineSource}
-							<span class="stamp text-green-400">
-								<WifiOff class="h-2.5 w-2.5" aria-hidden="true" /> Offline
+							<span class="stamp text-green-400">OFFLINE</span>
+						{/if}
+						{#if isAutoScrolling}
+							<span class="flex items-center gap-1 font-bold text-[var(--accent)]">
+								<span class="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]"
+								></span>
+								AUTO-SCROLL ({preferences.scrollSpeed.label})
 							</span>
 						{/if}
-					</p>
+					</div>
 				</div>
 			</div>
-			<div class="flex items-center gap-1">
+
+			<!-- Controles de Auto-Scroll, Zoom e Barra Lateral -->
+			<div class="flex items-center gap-1.5 sm:gap-2">
+				<!-- Botão de Auto-Scroll / Play-Pause -->
 				<button
-					class="flex h-9 w-9 items-center justify-center transition-colors hover:text-[var(--accent)] disabled:opacity-40"
+					type="button"
+					onclick={(e) => {
+						e.stopPropagation();
+						toggleAutoScroll();
+					}}
+					class={cn(
+						'flex h-8 items-center gap-1.5 border px-2.5 font-mono text-xs font-bold tracking-wider uppercase transition-colors',
+						isAutoScrolling
+							? 'border-[var(--accent)] bg-[var(--accent)] text-white shadow-sm'
+							: 'border-white/20 text-white hover:border-[var(--accent)] hover:text-[var(--accent)]'
+					)}
+					title="Ativar/Desativar Rolagem Automática (Espaço)"
+				>
+					{#if isAutoScrolling}
+						<Pause class="h-3.5 w-3.5" />
+						<span class="hidden sm:inline">Pausar</span>
+					{:else}
+						<Play class="h-3.5 w-3.5" />
+						<span class="hidden sm:inline">Auto</span>
+					{/if}
+				</button>
+
+				<!-- Botão de Ciclar Velocidade -->
+				<button
+					type="button"
+					onclick={(e) => {
+						e.stopPropagation();
+						cycleAutoScrollSpeed();
+					}}
+					class="flex h-8 items-center gap-1 border border-white/20 px-2 font-mono text-[0.625rem] font-bold text-white hover:border-[var(--accent)] hover:text-[var(--accent)]"
+					title="Velocidade de rolagem: {preferences.scrollSpeed.label}"
+				>
+					<FastForward class="h-3 w-3" />
+					<span>{preferences.scrollSpeed.level}x</span>
+				</button>
+
+				<div class="mx-1 h-4 w-px bg-white/20"></div>
+
+				<button
+					type="button"
 					onclick={(e) => {
 						e.stopPropagation();
 						zoomOut();
 					}}
 					disabled={zoomLevel <= MIN_ZOOM}
+					class="flex h-8 w-8 items-center justify-center border border-white/10 hover:border-[var(--accent)] disabled:opacity-30"
+					title="Diminuir Zoom (-)"
 				>
-					<ZoomOut class="h-4 w-4" aria-hidden="true" />
+					<ZoomOut class="h-3.5 w-3.5" />
 				</button>
-				<span class="tabular w-11 text-center text-xs font-bold"
-					>{Math.round(zoomLevel * 100)}%</span
-				>
+				<span class="w-10 text-center font-mono text-xs font-bold sm:w-12">
+					{Math.round(zoomLevel * 100)}%
+				</span>
 				<button
-					class="flex h-9 w-9 items-center justify-center transition-colors hover:text-[var(--accent)] disabled:opacity-40"
+					type="button"
 					onclick={(e) => {
 						e.stopPropagation();
 						zoomIn();
 					}}
 					disabled={zoomLevel >= MAX_ZOOM}
+					class="flex h-8 w-8 items-center justify-center border border-white/10 hover:border-[var(--accent)] disabled:opacity-30"
+					title="Aumentar Zoom (+)"
 				>
-					<ZoomIn class="h-4 w-4" aria-hidden="true" />
+					<ZoomIn class="h-3.5 w-3.5" />
 				</button>
 
-				<div class="mx-2 h-5 w-px bg-white/20"></div>
+				<div class="mx-1 h-4 w-px bg-white/20"></div>
 
 				<button
-					class="hidden h-9 w-9 items-center justify-center transition-colors hover:text-[var(--accent)] sm:flex"
+					type="button"
 					onclick={(e) => {
 						e.stopPropagation();
 						toggleFullscreen();
 					}}
+					class="hidden h-8 w-8 items-center justify-center border border-white/10 hover:border-[var(--accent)] sm:flex"
+					title="Alternar Tela Cheia (F)"
 				>
 					{#if isFullscreen}
-						<Minimize2 class="h-4 w-4" aria-hidden="true" />
+						<Minimize2 class="h-3.5 w-3.5" />
 					{:else}
-						<Maximize2 class="h-4 w-4" aria-hidden="true" />
+						<Maximize2 class="h-3.5 w-3.5" />
 					{/if}
 				</button>
+
 				<button
-					class="flex h-9 w-9 items-center justify-center transition-colors hover:text-[var(--accent)]"
+					type="button"
 					onclick={(e) => {
 						e.stopPropagation();
 						sidebarOpen = true;
 					}}
+					class="flex h-8 w-8 items-center justify-center border border-[var(--accent)] bg-[var(--accent)] text-white shadow-sm"
+					title="Abrir Menu de Capítulos e Configurações"
 				>
-					<Menu class="h-4 w-4" aria-hidden="true" />
+					<Menu class="h-4 w-4" />
 				</button>
 			</div>
-		</div>
+		</header>
 
-		<!-- READER AREA -->
+		<!-- ÁREA DO LEITOR -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class={cn(
@@ -567,9 +688,7 @@
 					class="h-full w-full overflow-x-hidden overflow-y-auto bg-black"
 					onscroll={handleVerticalScroll}
 				>
-					<div class="mx-auto flex w-full flex-col items-center pb-24 md:max-w-[720px]">
-						<!-- Chave pelo indice: em capitulo parcial as paginas que faltam sao
-						     string vazia, e uma chave duplicada derruba o each. -->
+					<div class="mx-auto flex w-full flex-col items-center pb-24 md:max-w-[760px]">
 						{#each pageUrls as url, i (i)}
 							{#if url}
 								<img
@@ -583,30 +702,36 @@
 							{:else}
 								<div
 									data-page={i + 1}
-									class="flex aspect-[2/3] w-full items-center justify-center text-sm text-[var(--text-muted)]"
+									class="flex aspect-[2/3] w-full items-center justify-center font-mono text-xs text-[var(--text-muted)]"
 								>
 									Página {i + 1} indisponível
 								</div>
 							{/if}
 						{/each}
 
-						<!-- Fim do capitulo: continuar sem voltar para a lista -->
+						<!-- Navegação ao Fim do Capítulo -->
 						<div class="flex w-full flex-col items-center gap-4 px-6 py-16">
 							{#if nextChapter}
 								<button
-									class="btn-primary w-full max-w-sm"
+									type="button"
+									class="border border-[var(--accent)] bg-[var(--accent)] px-8 py-3 text-xs font-black tracking-wider text-white uppercase shadow-lg transition-all hover:scale-105"
 									onclick={() => goToChapter(nextChapter)}
 								>
-									Próximo capítulo
+									Próximo Capítulo &bull; {nextChapter.chapter
+										? `Cap. ${nextChapter.chapter}`
+										: nextChapter.title}
 								</button>
 							{:else}
-								<p class="kicker text-white/50">Você chegou ao último capítulo</p>
+								<span class="hanko text-xs">完</span>
+								<p class="text-xs font-bold tracking-widest text-white/50 uppercase">
+									Você concluiu o último capítulo da obra
+								</p>
 							{/if}
 							<a
-								href={resolve(`/manga/${source}/${id}`)}
-								class="link-sweep text-sm text-white/70 hover:text-[var(--accent)]"
+								href={resolve('/manga/[source]/[id]', { source, id })}
+								class="text-xs font-bold tracking-wider text-white/70 uppercase hover:text-[var(--accent)]"
 							>
-								Voltar aos capítulos
+								Voltar ao Índice de Capítulos
 							</a>
 						</div>
 					</div>
@@ -625,17 +750,18 @@
 			{/if}
 		</div>
 
-		<!-- BOTTOM NAV -->
+		<!-- BARRA INFERIOR DE NAVEGAÇÃO RTL / PAGINADA -->
 		{#if readingMode !== 'vertical'}
-			<div
+			<footer
 				class={cn(
-					'absolute right-0 bottom-0 left-0 z-50 flex transform items-center justify-between bg-gradient-to-t from-black/85 to-transparent p-6 text-white transition-all duration-300',
+					'absolute right-0 bottom-0 left-0 z-50 flex items-center justify-between border-t border-white/10 bg-black/90 p-4 px-6 text-white backdrop-blur-md transition-all duration-300',
 					isControlsVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0',
 					sidebarOpen ? 'mr-80' : ''
 				)}
 			>
 				<button
-					class="flex h-11 w-11 items-center justify-center border border-white/15 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-30"
+					type="button"
+					class="flex h-10 w-10 items-center justify-center border border-white/20 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-20"
 					onclick={(e) => {
 						e.stopPropagation();
 						pageLeft();
@@ -644,24 +770,25 @@
 						? currentPage >= pageUrls.length && !nextChapter
 						: currentPage <= 1 && !prevChapter}
 				>
-					<ChevronLeft class="h-5 w-5" aria-hidden="true" />
+					<ChevronLeft class="h-5 w-5" />
 				</button>
 
-				<div class="flex-1 px-8">
+				<div class="flex-1 px-6 sm:px-12">
 					<input
 						type="range"
 						min="1"
 						max={pageUrls.length}
 						value={currentPage}
 						oninput={(e) => setPage(Number((e.currentTarget as HTMLInputElement).value))}
-						class="w-full accent-[var(--accent)]"
+						class="w-full cursor-pointer accent-[var(--accent)]"
 						onclick={(e) => e.stopPropagation()}
 						dir={readingMode === 'rtl' ? 'rtl' : 'ltr'}
 					/>
 				</div>
 
 				<button
-					class="flex h-11 w-11 items-center justify-center border border-white/15 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-30"
+					type="button"
+					class="flex h-10 w-10 items-center justify-center border border-white/20 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-20"
 					onclick={(e) => {
 						e.stopPropagation();
 						pageRight();
@@ -670,123 +797,158 @@
 						? currentPage <= 1 && !prevChapter
 						: currentPage >= pageUrls.length && !nextChapter}
 				>
-					<ChevronRight class="h-5 w-5" aria-hidden="true" />
+					<ChevronRight class="h-5 w-5" />
 				</button>
-			</div>
+			</footer>
 		{/if}
 
-		<!-- SIDEBAR -->
+		<!-- DRAWER LATERAL DE CAPÍTULOS & AJUSTES -->
 		{#if sidebarOpen}
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div class="absolute inset-0 z-40 bg-black/60" onclick={() => (sidebarOpen = false)}></div>
+			<div
+				class="absolute inset-0 z-40 bg-black/70 backdrop-blur-sm"
+				onclick={() => (sidebarOpen = false)}
+			></div>
 		{/if}
-		<div
+		<aside
 			class={cn(
-				'absolute top-0 right-0 bottom-0 z-50 flex w-80 transform flex-col bg-[var(--bg-secondary)] text-[var(--text-primary)] shadow-2xl transition-transform duration-300',
+				'absolute top-0 right-0 bottom-0 z-50 flex w-80 flex-col border-l border-[var(--rule)] bg-[var(--bg-secondary)] text-[var(--text-primary)] shadow-2xl transition-transform duration-300',
 				sidebarOpen ? 'translate-x-0' : 'translate-x-full'
 			)}
 		>
-			<div class="flex items-center justify-between border-b border-[var(--border)] p-3">
-				<div class="flex gap-1">
+			<div class="flex items-center justify-between border-b border-[var(--rule)] p-3">
+				<div class="flex gap-2">
 					<button
+						type="button"
 						class={cn(
-							'flex items-center gap-1.5 px-3 py-2 text-[0.625rem] font-bold tracking-[0.14em] uppercase transition-colors',
+							'px-3 py-1.5 text-[0.625rem] font-bold tracking-wider uppercase transition-colors',
 							sidebarTab === 'chapters'
-								? 'bg-[var(--accent)]/10 text-[var(--accent)]'
-								: 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+								? 'bg-[var(--accent)] text-white'
+								: 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
 						)}
 						onclick={() => (sidebarTab = 'chapters')}
 					>
-						<List class="h-3.5 w-3.5" aria-hidden="true" /> Capítulos
+						Capítulos
 					</button>
 					<button
+						type="button"
 						class={cn(
-							'flex items-center gap-1.5 px-3 py-2 text-[0.625rem] font-bold tracking-[0.14em] uppercase transition-colors',
+							'px-3 py-1.5 text-[0.625rem] font-bold tracking-wider uppercase transition-colors',
 							sidebarTab === 'settings'
-								? 'bg-[var(--accent)]/10 text-[var(--accent)]'
-								: 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+								? 'bg-[var(--accent)] text-white'
+								: 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
 						)}
 						onclick={() => (sidebarTab = 'settings')}
 					>
-						<Settings class="h-3.5 w-3.5" aria-hidden="true" /> Ajustes
+						Ajustes
 					</button>
 				</div>
 				<button
-					class="flex h-8 w-8 items-center justify-center text-[var(--text-muted)] transition-colors hover:text-[var(--accent)]"
+					type="button"
+					class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
 					onclick={() => (sidebarOpen = false)}
 				>
-					<X class="h-4 w-4" aria-hidden="true" />
+					<X class="h-4 w-4" />
 				</button>
 			</div>
 
 			<div class="flex-1 overflow-y-auto p-4">
 				{#if sidebarTab === 'settings'}
-					<p class="kicker mb-3">Modo de leitura</p>
+					<span class="kicker mb-3 block text-[0.625rem]">Modo de Leitura</span>
 					<div class="flex flex-col gap-2">
 						{#each READING_MODES as mode (mode.value)}
 							<button
+								type="button"
 								class={cn(
-									'border p-3 text-left text-sm font-bold transition-colors',
+									'flex items-center justify-between border p-3 text-left text-xs font-bold tracking-wider uppercase transition-all',
 									readingMode === mode.value
-										? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]'
-										: 'border-[var(--border)] hover:border-[var(--text-muted)]'
+										? 'border-[var(--accent)] bg-[var(--accent)] text-white shadow-md'
+										: 'border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
 								)}
 								onclick={() => preferences.setReadingMode(mode.value)}
 							>
-								{mode.label}
+								<span>{mode.label}</span>
+								<span class="font-mono text-[0.625rem] opacity-80">{mode.kanji}</span>
+							</button>
+						{/each}
+					</div>
+
+					<span class="kicker mt-6 mb-3 block text-[0.625rem]">Velocidade do Auto-Scroll</span>
+					<div class="flex flex-col gap-2">
+						{#each SCROLL_SPEEDS as speed (speed.level)}
+							<button
+								type="button"
+								class={cn(
+									'flex items-center justify-between border p-2.5 text-left text-xs font-bold tracking-wider uppercase transition-all',
+									preferences.autoScrollSpeedLevel === speed.level
+										? 'border-[var(--accent)] bg-[var(--accent)] text-white shadow-md'
+										: 'border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+								)}
+								onclick={() => preferences.setAutoScrollSpeedLevel(speed.level)}
+							>
+								<span>{speed.label} ({speed.level}x)</span>
+								<span class="font-mono text-[0.625rem] opacity-80">
+									{readingMode === 'vertical'
+										? `${speed.pixelsPerSecond} px/s`
+										: `${speed.secondsPerPage} s/pág`}
+								</span>
 							</button>
 						{/each}
 					</div>
 				{:else if chapters.length === 0}
-					<p class="kicker py-8 text-center">Carregando lista de capítulos…</p>
+					<p class="py-8 text-center text-xs text-[var(--text-muted)]">
+						Carregando lista de capítulos...
+					</p>
 				{:else}
 					<div class="flex flex-col gap-1">
 						{#each chapters as chapter, i (chapter.source_id)}
 							<button
+								type="button"
 								class={cn(
-									'flex items-center gap-3 px-2 py-2.5 text-left text-sm transition-colors',
+									'flex items-center justify-between border p-2.5 text-left text-xs transition-colors',
 									chapter.source_id === chapterId
-										? 'bg-[var(--accent)]/10 font-bold text-[var(--accent)]'
-										: 'hover:bg-[var(--bg-accent)]'
+										? 'border-[var(--accent)] bg-[var(--accent)]/10 font-bold text-[var(--accent)]'
+										: 'border-transparent hover:border-[var(--border)] hover:bg-[var(--bg-primary)]'
 								)}
 								onclick={() => goToChapter(chapter)}
 							>
-								<span class="folio flex-shrink-0" style="font-size:1.125rem">
-									{String(i + 1).padStart(2, '0')}
-								</span>
-								<span class="flex min-w-0 flex-1 items-center justify-between gap-2">
+								<div class="flex min-w-0 items-center gap-2">
+									<span class="font-mono text-xs font-black text-[var(--accent)]">
+										{String(i + 1).padStart(2, '0')}
+									</span>
 									<span class="truncate">
 										{chapter.chapter ? `Cap. ${chapter.chapter}` : (chapter.title ?? 'Capítulo')}
 									</span>
-									{#if mangaStore.isChapterRead(id, source, chapter.source_id)}
-										<span class="text-[0.625rem] tracking-wider text-green-500 uppercase">lido</span
-										>
-									{/if}
-								</span>
+								</div>
+								{#if mangaStore.isChapterRead(id, source, chapter.source_id)}
+									<span class="font-mono text-[0.5625rem] font-bold text-green-500">LIDO</span>
+								{/if}
 							</button>
 						{/each}
 					</div>
 				{/if}
 			</div>
 
-			<!-- Navegacao rapida entre capitulos -->
-			<div class="flex gap-2 border-t border-[var(--border)] p-3">
+			<!-- Rodapé do Drawer com Navegação Rápida -->
+			<div class="flex gap-2 border-t border-[var(--rule)] p-3">
 				<button
-					class="btn-ghost flex-1 disabled:opacity-30"
+					type="button"
+					class="flex-1 border border-[var(--border)] py-2 font-mono text-[0.625rem] font-bold tracking-wider text-[var(--text-muted)] uppercase hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-30"
 					onclick={() => goToChapter(prevChapter)}
 					disabled={!prevChapter}
 				>
-					Anterior
+					Cap. Anterior
 				</button>
 				<button
-					class="btn-ghost flex-1 disabled:opacity-30"
+					type="button"
+					class="flex-1 border border-[var(--accent)] bg-[var(--accent)] py-2 font-mono text-[0.625rem] font-bold tracking-wider text-white uppercase disabled:opacity-30"
 					onclick={() => goToChapter(nextChapter)}
 					disabled={!nextChapter}
 				>
-					Próximo
+					Próximo Cap.
 				</button>
 			</div>
-		</div>
+		</aside>
 	{/if}
 </div>

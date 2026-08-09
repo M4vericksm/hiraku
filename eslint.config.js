@@ -12,6 +12,11 @@ const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');
 
 export default defineConfig(
 	includeIgnoreFile(gitignorePath),
+	{
+		// Bundles do Capacitor e saida do build Android: codigo gerado e
+		// minificado, que so gera ruido no lint do que a gente escreve.
+		ignores: ['android/**', 'build/**', '.svelte-kit/**', 'dist/**']
+	},
 	js.configs.recommended,
 	ts.configs.recommended,
 	svelte.configs.recommended,
