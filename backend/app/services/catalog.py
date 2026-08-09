@@ -50,11 +50,18 @@ class CatalogService:
     ) -> list[MangaSearchResult]:
         adapters = [self.registry.get(source_id)] if source_id else self.registry.all()
 
+        # Em multi-fonte cada adapter precisa trazer mais que `limit`: o
+        # interleave descarta a cauda de cada pool, e pedir exatamente `limit`
+        # deixaria uma fonte sem candidato ja na segunda rodada. O teto e alto
+        # de proposito — as scans PT-BR tem catalogo pequeno e se esgotam
+        # rapido, entao quem ainda tem candidato precisa poder preencher.
+        per_source = limit if source_id else min(limit * 2, 60)
+
         async def _one(adapter) -> list[MangaSearchResult]:
-            key = f"search:{adapter.info.id}:{query.strip().lower()}:{limit}"
+            key = f"search:{adapter.info.id}:{query.strip().lower()}:{per_source}"
             try:
                 return await self.cache.get_or_set(
-                    key, lambda a=adapter: a.search(query, limit)
+                    key, lambda a=adapter: a.search(query, per_source)
                 )
             except Exception:
                 # Uma fonte morta nao pode apagar o resultado das outras.
@@ -64,9 +71,47 @@ class CatalogService:
                 return []
 
         batches = await asyncio.gather(*[_one(adapter) for adapter in adapters])
-        results = [item for batch in batches for item in batch]
-        ranked = sorted(results, key=lambda result: result.score, reverse=True)[:limit]
+        ranked = self._interleave(batches, limit)
         return [self._with_proxied_cover(result) for result in ranked]
+
+    @staticmethod
+    def _interleave(
+        batches: list[list[MangaSearchResult]], limit: int
+    ) -> list[MangaSearchResult]:
+        """Intercala as fontes em vez de so ordenar por score.
+
+        Ordenar o pool inteiro por score parece certo mas na pratica entrega
+        so uma fonte: o MangaDex tem catalogo enorme e devolve `limit` titulos
+        parecidos, todos com score alto, empurrando as scans PT-BR para fora
+        do corte mesmo quando elas tem a obra. Rodada a rodada cada fonte poe
+        seu melhor resultado ainda nao usado, entao o topo do ranking vira uma
+        amostra de todas as fontes vivas e o resto preenche por score.
+        """
+        pools = [
+            sorted(batch, key=lambda result: result.score, reverse=True)
+            for batch in batches
+            if batch
+        ]
+
+        picked: list[MangaSearchResult] = []
+        seen: set[tuple[str, str]] = set()
+        cursor = 0
+
+        while len(picked) < limit and any(cursor < len(pool) for pool in pools):
+            round_items = [pool[cursor] for pool in pools if cursor < len(pool)]
+            # Dentro da rodada o score ainda manda: a fonte com o melhor
+            # casamento aparece primeiro, so nao monopoliza a lista.
+            for item in sorted(round_items, key=lambda result: result.score, reverse=True):
+                key = (item.source, item.source_id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                picked.append(item)
+                if len(picked) == limit:
+                    break
+            cursor += 1
+
+        return picked
 
     async def detail(self, source_id: str, source_manga_id: str) -> MangaSearchResult:
         adapter = self.registry.get(source_id)
