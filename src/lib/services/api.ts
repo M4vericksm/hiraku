@@ -224,9 +224,19 @@ export class BackendApiService {
 		return request<GenreInfo[]>('/genres', { signal });
 	}
 
-	static search(query: string, source?: string, signal?: AbortSignal): Promise<MangaSearchResult[]> {
+	/**
+	 * `limit` e o total agregado de todas as fontes, nao por fonte. Com o
+	 * default do backend (10) e cinco fontes vivas sobravam duas obras por
+	 * fonte, o que parecia busca incompleta.
+	 */
+	static search(
+		query: string,
+		source?: string,
+		signal?: AbortSignal,
+		limit = 60
+	): Promise<MangaSearchResult[]> {
 		return request<MangaSearchResult[]>('/manga/search', {
-			params: { q: query, ...(source ? { source } : {}) },
+			params: { q: query, limit: String(limit), ...(source ? { source } : {}) },
 			signal
 		});
 	}

@@ -8,11 +8,18 @@
  * informacao de progresso, e marcas de registro de impressao nos cantos.
  * A arte da capa e o conteudo principal, entao o resto do cromo fica quieto:
  * tipografia condensada pesada apenas nos titulos e nos numerais.
+ *
+ * O vocabulario concreto que implementa isso, com o nome de origem para quem
+ * for procurar referencia:
+ * - lombada (spine), faixa de papel (obi), marcas de registro (tonbo トンボ);
+ * - retícula de meio-tom (screentone 網点) e linhas de acao (speedlines 集中線);
+ * - selo de carimbo (hanko 判子) e micro-tipografia em kanji/kana;
+ * - temas Ink (escuro), Neon e Paper (claro).
  */
 
 @theme {
-	--font-display: 'Anton', 'Arial Narrow', sans-serif;
-	--font-body: 'DM Sans', system-ui, sans-serif;
+	--font-display: 'Anton', 'Arial Narrow', 'Hiragino Sans', sans-serif;
+	--font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
 	--color-accent: var(--accent);
 	--color-ink: var(--bg-primary);
@@ -20,76 +27,94 @@
 }
 
 @layer base {
-	/* Theme: Ink (escuro) — padrao */
+	/* Theme: Ink (Escuro Profundo Sumi-e) — Padrão */
 	:root,
 	.theme-ink {
-		--bg-primary: #0a0a0a;
-		--bg-secondary: #141414;
-		--bg-accent: #1f1f1f;
+		--bg-primary: #070708;
+		--bg-secondary: #111113;
+		--bg-accent: #1a1a1d;
+		--bg-card: #141416;
 
 		--text-primary: #f5f5f0;
-		--text-secondary: #a3a3a0;
-		--text-muted: #6b6b68;
+		--text-secondary: #a3a39e;
+		--text-muted: #6b6b66;
 
 		--accent: #e53935;
-		--accent-hover: #ff5252;
+		--accent-hover: #ff4d4d;
+		--accent-glow: rgba(229, 57, 53, 0.25);
 		--accent-foreground: #ffffff;
 
-		--border: #2a2a2a;
-		--rule: #3d3d3d;
+		--border: #222226;
+		--rule: #36363b;
 
-		/* Trama de meio-tom: da textura de papel impresso sem virar imagem. */
-		--halftone: rgba(255, 255, 255, 0.045);
-		--overlay: rgba(0, 0, 0, 0.72);
+		--halftone: rgba(255, 255, 255, 0.04);
+		--halftone-dense: rgba(255, 255, 255, 0.08);
+		--overlay: rgba(7, 7, 8, 0.85);
+
+		--spine-shadow: rgba(0, 0, 0, 0.65);
+		--spine-highlight: rgba(255, 255, 255, 0.1);
+		--paper-grain: rgba(255, 255, 255, 0.015);
 	}
 
-	/* Theme: Neon (escuro) */
+	/* Theme: Neon (Cyber Tokyo Dark) */
 	.theme-neon {
-		--bg-primary: #050b1a;
-		--bg-secondary: #0b1327;
-		--bg-accent: #16203d;
+		--bg-primary: #030712;
+		--bg-secondary: #0a1024;
+		--bg-accent: #131d3d;
+		--bg-card: #0c142b;
 
-		--text-primary: #e6ebff;
+		--text-primary: #f0f4ff;
 		--text-secondary: #94a3b8;
-		--text-muted: #5b6a83;
+		--text-muted: #53627c;
 
 		--accent: #8b5cf6;
 		--accent-hover: #a78bfa;
+		--accent-glow: rgba(139, 92, 246, 0.35);
 		--accent-foreground: #ffffff;
 
-		--border: #1c2942;
-		--rule: #2d3d5c;
+		--border: #182645;
+		--rule: #273b64;
 
-		--halftone: rgba(139, 92, 246, 0.07);
-		--overlay: rgba(5, 11, 26, 0.78);
+		--halftone: rgba(139, 92, 246, 0.06);
+		--halftone-dense: rgba(139, 92, 246, 0.12);
+		--overlay: rgba(3, 7, 18, 0.88);
+
+		--spine-shadow: rgba(0, 0, 0, 0.8);
+		--spine-highlight: rgba(139, 92, 246, 0.2);
+		--paper-grain: rgba(139, 92, 246, 0.025);
 	}
 
-	/* Theme: Paper (claro) */
+	/* Theme: Paper (Parchment Japonês Clássico) */
 	.theme-paper {
-		--bg-primary: #f7f5ef;
+		--bg-primary: #f6f3eb;
 		--bg-secondary: #ffffff;
-		--bg-accent: #eceae0;
+		--bg-accent: #eae5d6;
+		--bg-card: #ffffff;
 
-		--text-primary: #17171a;
-		--text-secondary: #4d4d52;
-		--text-muted: #8a8a85;
+		--text-primary: #121214;
+		--text-secondary: #4a4a50;
+		--text-muted: #82828a;
 
-		--accent: #b02a2a;
-		--accent-hover: #8f1f1f;
+		--accent: #b82828;
+		--accent-hover: #9c1f1f;
+		--accent-glow: rgba(184, 40, 40, 0.2);
 		--accent-foreground: #ffffff;
 
-		--border: #ddd9cb;
-		--rule: #c4bfad;
+		--border: #dcd6c5;
+		--rule: #c2baa5;
 
-		--halftone: rgba(23, 23, 26, 0.04);
-		--overlay: rgba(23, 23, 26, 0.7);
+		--halftone: rgba(18, 18, 20, 0.04);
+		--halftone-dense: rgba(18, 18, 20, 0.08);
+		--overlay: rgba(246, 243, 235, 0.9);
+
+		--spine-shadow: rgba(0, 0, 0, 0.15);
+		--spine-highlight: rgba(255, 255, 255, 0.8);
+		--paper-grain: rgba(0, 0, 0, 0.02);
 	}
 
 	:root {
 		--radius: 0.25rem;
-		--radius-lg: 0.625rem;
-
-		/* Reduz o repique do scroll quando o leitor troca de pagina. */
+		--radius-lg: 0.5rem;
 		scroll-behavior: smooth;
 	}
 
@@ -110,10 +135,12 @@
 		background-color: var(--bg-primary);
 		color: var(--text-primary);
 		font-family: var(--font-body);
-		font-feature-settings: 'ss01', 'cv01';
+		font-feature-settings: 'ss01', 'cv01', 'tnum';
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
 		text-rendering: optimizeLegibility;
+		background-image: radial-gradient(var(--paper-grain) 1px, transparent 1px);
+		background-size: 8px 8px;
 	}
 
 	h1,
@@ -127,7 +154,6 @@
 		letter-spacing: 0.01em;
 	}
 
-	/* Foco visivel e consistente: a versao anterior removia o outline sem repor. */
 	:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
@@ -138,74 +164,77 @@
 		color: var(--accent-foreground);
 	}
 
-	/* Barras de rolagem discretas, alinhadas ao tema. */
 	* {
 		scrollbar-width: thin;
 		scrollbar-color: var(--rule) transparent;
 	}
 	::-webkit-scrollbar {
-		width: 10px;
-		height: 10px;
+		width: 8px;
+		height: 8px;
 	}
 	::-webkit-scrollbar-track {
 		background: transparent;
 	}
 	::-webkit-scrollbar-thumb {
 		background-color: var(--rule);
-		border: 3px solid transparent;
+		border: 2px solid transparent;
 		background-clip: content-box;
 		border-radius: 999px;
+	}
+	::-webkit-scrollbar-thumb:hover {
+		background-color: var(--accent);
 	}
 }
 
 @layer components {
-	/* ---------- Tipografia editorial ---------- */
+	/* ---------- Tipografia Editorial de Alto Impacto ---------- */
 
-	/* Masthead: o titulo grande de cada tela. Condensado, caixa alta, apertado. */
+	/* Masthead: Título monumental condensado estilo pôster japonês. */
 	.masthead {
 		font-family: var(--font-display);
-		font-size: clamp(2.75rem, 9vw, 5.5rem);
-		line-height: 0.86;
-		letter-spacing: -0.015em;
+		font-size: clamp(2.75rem, 8.5vw, 5.5rem);
+		line-height: 0.88;
+		letter-spacing: -0.02em;
 		text-transform: uppercase;
 	}
 
-	/* Kicker: a etiqueta tecnica acima do masthead. */
+	/* Kicker: Etiqueta técnica minimalista com tracking expandido. */
 	.kicker {
 		font-family: var(--font-body);
 		font-size: 0.625rem;
-		font-weight: 700;
+		font-weight: 800;
 		letter-spacing: 0.28em;
 		text-transform: uppercase;
 		color: var(--text-muted);
 	}
 
-	/* Numeral de secao, do tamanho de um folio de revista. */
+	/* Folio: Numeração editorial proeminente de página/volume. */
 	.folio {
 		font-family: var(--font-display);
-		font-size: clamp(2rem, 5vw, 3rem);
+		font-size: clamp(2rem, 4.5vw, 3rem);
 		line-height: 1;
 		color: var(--rule);
 		font-variant-numeric: tabular-nums;
 	}
 
-	/* Tipo vertical japones, usado nas lombadas. */
+	/* Tategaki: Escrita vertical tradicional japonesa (縦書き). */
 	.tategaki {
 		writing-mode: vertical-rl;
 		text-orientation: upright;
 		letter-spacing: 0.35em;
+		font-family: var(--font-display);
 	}
 
-	/* ---------- Estrutura ---------- */
+	/* ---------- Estrutura & Grafismos Japoneses ---------- */
 
-	/* Regra dupla: a assinatura que separa cabecalho de conteudo. */
+	/* Regra dupla editorial com acabamento afiado. */
 	.rule-double {
 		border-top: 3px solid var(--text-primary);
 		border-bottom: 1px solid var(--rule);
-		height: 5px;
+		height: 6px;
 	}
 
-	/* Marcas de registro de impressao nos cantos de um bloco. */
+	/* Tonbo (トンボ) — Cruzes e marcas de registro de impressão nos cantos. */
 	.registration {
 		position: relative;
 	}
@@ -217,71 +246,159 @@
 		height: 10px;
 		border-color: var(--rule);
 		pointer-events: none;
+		transition: border-color 0.2s ease;
 	}
 	.registration::before {
 		top: -1px;
 		left: -1px;
-		border-top: 1px solid;
-		border-left: 1px solid;
+		border-top: 2px solid;
+		border-left: 2px solid;
 	}
 	.registration::after {
 		right: -1px;
 		bottom: -1px;
-		border-right: 1px solid;
-		border-bottom: 1px solid;
+		border-right: 2px solid;
+		border-bottom: 2px solid;
+	}
+	.registration:hover::before,
+	.registration:hover::after {
+		border-color: var(--accent);
 	}
 
-	/* Textura de meio-tom. Fica no fundo de faixas largas. */
+	/* Retícula Screentone de Mangá (網点) */
 	.halftone {
-		background-image: radial-gradient(var(--halftone) 1px, transparent 1px);
+		background-image: radial-gradient(var(--halftone) 1.25px, transparent 1.25px);
 		background-size: 6px 6px;
 	}
+	.halftone-dense {
+		background-image: radial-gradient(var(--halftone-dense) 1.5px, transparent 1.5px);
+		background-size: 5px 5px;
+	}
 
-	/* ---------- Volume (a capa como um tankobon) ---------- */
+	/* Speedlines sutis de mangá para fundos dramáticos */
+	.manga-speedlines {
+		background: repeating-conic-gradient(
+			from 0deg at 50% 50%,
+			transparent 0deg 3deg,
+			var(--halftone) 3.5deg 4deg,
+			transparent 4.5deg 8deg
+		);
+	}
 
-	/* Lombada: a fatia escura na borda esquerda da capa. */
+	/* Painel de Mangá com bordas nítidas e detalhes de corte */
+	.manga-panel {
+		background-color: var(--bg-secondary);
+		border: 1px solid var(--border);
+		box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+		transition:
+			transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+			border-color 0.2s ease,
+			box-shadow 0.25s ease;
+	}
+
+	/* ---------- Volume (encadernação física) ---------- */
+
+	/* Lombada realista de livro encadernado: sombra de relevo e vinco de papel */
 	.volume {
 		position: relative;
 		background-color: var(--bg-accent);
 		overflow: hidden;
 		box-shadow:
-			inset 3px 0 0 rgb(0 0 0 / 0.35),
-			inset 4px 0 0 rgb(255 255 255 / 0.08);
+			inset 4px 0 6px -1px var(--spine-shadow),
+			inset 5px 0 0 0 var(--spine-highlight),
+			0 12px 24px -6px rgba(0, 0, 0, 0.45);
+		transition:
+			transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+			box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+	}
+	.volume::after {
+		content: '';
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		width: 3px;
+		background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08));
+		pointer-events: none;
 	}
 
-	/* Obi: a faixa de papel na base da capa. Carrega progresso e metadados. */
+	/* Obi (帯): Faixa de papel promocional envolvendo a base do volume */
 	.obi {
 		background-color: var(--bg-secondary);
-		border-top: 1px solid var(--accent);
+		border-top: 2px solid var(--accent);
 		font-family: var(--font-body);
 		font-size: 0.5625rem;
-		font-weight: 700;
-		letter-spacing: 0.16em;
+		font-weight: 800;
+		letter-spacing: 0.18em;
 		text-transform: uppercase;
+		box-shadow: 0 -4px 12px -2px rgba(0, 0, 0, 0.3);
 	}
 
-	/* ---------- Controles ---------- */
+	/* ---------- Hanko (判子) & Carimbos Tradicionais ---------- */
+
+	/* Selo Hanko japonês em vermelho vermelhão ou accent */
+	.hanko {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.125rem 0.375rem;
+		border: 1.5px solid var(--accent);
+		color: var(--accent);
+		font-family: var(--font-display);
+		font-size: 0.625rem;
+		font-weight: 700;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		border-radius: 2px;
+		transform: rotate(-3deg);
+		background-color: var(--accent-glow);
+		box-shadow: 0 0 8px var(--accent-glow);
+		user-select: none;
+	}
+
+	.stamp {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3125rem;
+		border: 1.5px solid currentColor;
+		border-radius: var(--radius);
+		padding: 0.1875rem 0.5rem;
+		font-family: var(--font-body);
+		font-size: 0.5625rem;
+		font-weight: 800;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		transform: rotate(-1.5deg);
+		background-color: rgba(255, 255, 255, 0.02);
+	}
+
+	/* ---------- Controles & Botões Táteis ---------- */
 
 	.btn-primary {
+		position: relative;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
 		background-color: var(--accent);
 		color: var(--accent-foreground);
-		padding: 0.6875rem 1.25rem;
+		padding: 0.75rem 1.375rem;
 		border-radius: var(--radius);
 		font-family: var(--font-body);
 		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.12em;
+		font-weight: 800;
+		letter-spacing: 0.16em;
 		text-transform: uppercase;
+		box-shadow: 0 4px 14px var(--accent-glow);
 		transition:
 			background-color 0.18s ease,
-			transform 0.12s ease;
+			transform 0.12s ease,
+			box-shadow 0.18s ease;
 	}
 	.btn-primary:hover:not(:disabled) {
 		background-color: var(--accent-hover);
+		transform: translateY(-1px);
+		box-shadow: 0 6px 20px var(--accent-glow);
 	}
 	.btn-primary:active:not(:disabled) {
 		transform: translateY(1px);
@@ -289,6 +406,7 @@
 	.btn-primary:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;
+		box-shadow: none;
 	}
 
 	.btn-ghost {
@@ -297,22 +415,28 @@
 		justify-content: center;
 		gap: 0.5rem;
 		border: 1px solid var(--rule);
+		background-color: var(--bg-secondary);
 		color: var(--text-primary);
-		padding: 0.625rem 1.25rem;
+		padding: 0.6875rem 1.375rem;
 		border-radius: var(--radius);
 		font-family: var(--font-body);
 		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.12em;
+		font-weight: 800;
+		letter-spacing: 0.16em;
 		text-transform: uppercase;
 		transition:
 			border-color 0.18s ease,
 			color 0.18s ease,
-			background-color 0.18s ease;
+			background-color 0.18s ease,
+			transform 0.12s ease;
 	}
 	.btn-ghost:hover:not(:disabled) {
 		border-color: var(--accent);
 		color: var(--accent);
+		transform: translateY(-1px);
+	}
+	.btn-ghost:active:not(:disabled) {
+		transform: translateY(1px);
 	}
 	.btn-ghost:disabled {
 		opacity: 0.35;
@@ -323,7 +447,7 @@
 		width: 100%;
 		background-color: transparent;
 		border: 0;
-		border-bottom: 1px solid var(--rule);
+		border-bottom: 1.5px solid var(--rule);
 		color: var(--text-primary);
 		font-family: var(--font-body);
 		padding: 0.625rem 0;
@@ -344,16 +468,19 @@
 		color: var(--text-primary);
 		font-family: var(--font-body);
 		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.08em;
+		font-weight: 800;
+		letter-spacing: 0.1em;
 		text-transform: uppercase;
-		padding: 0.625rem 0.875rem;
+		padding: 0.6875rem 0.875rem;
 		border-radius: var(--radius);
-		transition: border-color 0.18s ease;
+		transition:
+			border-color 0.18s ease,
+			box-shadow 0.18s ease;
 	}
 	.select:focus {
 		outline: none;
 		border-color: var(--accent);
+		box-shadow: 0 0 0 1px var(--accent);
 	}
 
 	.card {
@@ -363,43 +490,35 @@
 		overflow: hidden;
 	}
 
-	/* Etiqueta pequena: fonte, genero, idioma. Um traco, nao um pilula colorida. */
+	/* Chip de gênero/fonte com estética de etiqueta impressa */
 	.chip {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.375rem;
 		border: 1px solid var(--rule);
+		background-color: var(--bg-secondary);
 		color: var(--text-secondary);
-		padding: 0.25rem 0.5rem;
-		font-family: var(--font-body);
-		font-size: 0.5625rem;
-		font-weight: 700;
-		letter-spacing: 0.14em;
-		text-transform: uppercase;
-	}
-	.chip-accent {
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-
-	/* Carimbo: selo levemente rotacionado, tom de tinta de impressao. Usado para
-	   estados como "offline" ou "lido" — reforca o vocabulario de papel. */
-	.stamp {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.3125rem;
-		border: 1.5px solid currentColor;
-		border-radius: var(--radius);
-		padding: 0.1875rem 0.4375rem;
+		padding: 0.3125rem 0.625rem;
 		font-family: var(--font-body);
 		font-size: 0.5625rem;
 		font-weight: 800;
 		letter-spacing: 0.16em;
 		text-transform: uppercase;
-		transform: rotate(-2deg);
+		border-radius: var(--radius);
+		transition: all 0.18s ease;
+	}
+	.chip:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+		transform: translateY(-1px);
+	}
+	.chip-accent {
+		border-color: var(--accent);
+		color: var(--accent);
+		background-color: var(--accent-glow);
 	}
 
-	/* Link com sublinhado que varre da esquerda no hover, em vez de aparecer inteiro. */
+	/* Link animado com sublinhado em varredura */
 	.link-sweep {
 		position: relative;
 		display: inline-block;
@@ -410,17 +529,17 @@
 		left: 0;
 		bottom: -2px;
 		width: 100%;
-		height: 1px;
+		height: 2px;
 		background-color: currentColor;
 		transform: scaleX(0);
 		transform-origin: left;
-		transition: transform 0.25s ease;
+		transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 	}
 	.link-sweep:hover::after {
 		transform: scaleX(1);
 	}
 
-	/* Placeholder de carregamento com o mesmo peso visual do conteudo final. */
+	/* Shimmer de carregamento sincronizado com o grid de volumes */
 	.shimmer {
 		position: relative;
 		overflow: hidden;
@@ -430,10 +549,13 @@
 		content: '';
 		position: absolute;
 		inset: 0;
-		background: linear-gradient(90deg, transparent, var(--halftone), transparent);
-		animation: shimmer 1.4s infinite;
+		background: linear-gradient(90deg, transparent, var(--halftone-dense), transparent);
+		animation: shimmer 1.5s infinite;
 	}
 	@keyframes shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
 		100% {
 			transform: translateX(100%);
 		}
