@@ -36,6 +36,11 @@ AJAX_HEADERS = {**BROWSER_HEADERS, "X-Requested-With": "XMLHttpRequest"}
 # slug sozinho nao basta para remontar a URL — precisamos dos dois.
 ID_SEPARATOR = "___"
 
+# Teto de paginas da busca. O Madara serve 10 resultados por pagina; o corte
+# evita varrer o catalogo inteiro de uma scan quando a query casa com quase
+# tudo, ao custo de ignorar a cauda longa (que ja teria score baixo).
+MAX_SEARCH_PAGES = 5
+
 # Ultimo segmento da URL que nunca e um capitulo. O link do capitulo mora sob
 # o mesmo path do manga que estes, entao filtrar por prefixo nao resolve.
 _NOT_A_CHAPTER = {"feed", "ajax", "comments", "amp", "embed"}
@@ -115,16 +120,56 @@ class MadaraSource:
         return f"{self._base_url}/{self._manga_path}/{manga_source_id}/"
 
     async def search(self, query: str, limit: int = 10) -> list[MangaSearchResult]:
+        results: list[MangaSearchResult] = []
+        seen: set[str] = set()
+
+        # O Madara pagina a busca de 10 em 10. Ler so a primeira pagina
+        # limitava toda fonte Madara a 10 resultados por mais alto que fosse o
+        # `limit`, o que na agregacao multi-fonte parecia busca incompleta.
+        for page in range(1, MAX_SEARCH_PAGES + 1):
+            if len(results) >= limit:
+                break
+
+            found = await self._search_page(query, page)
+            if not found:
+                # Sem resultados nessa pagina, as seguintes tambem estao vazias.
+                break
+
+            new_in_page = 0
+            for slug, title, block in found:
+                if slug in seen:
+                    continue
+                seen.add(slug)
+                new_in_page += 1
+                results.append(
+                    MangaSearchResult(
+                        source=self.info.id,
+                        source_id=slug,
+                        title=title,
+                        cover_url=_first_image(block),
+                        score=title_score(query, [title]),
+                    )
+                )
+
+            # Alguns sites devolvem a pagina 1 para qualquer `page` fora do
+            # alcance, em vez de 404. Sem item novo, seguir e so repetir.
+            if new_in_page == 0:
+                break
+
+        return sorted(results, key=lambda item: item.score, reverse=True)[:limit]
+
+    async def _search_page(self, query: str, page: int) -> list[tuple[str, str, str]]:
+        """Le uma pagina da busca e devolve (slug, titulo, bloco_html)."""
+        url = f"{self._base_url}/" if page == 1 else f"{self._base_url}/page/{page}/"
         response = await get_client().get(
-            f"{self._base_url}/",
+            url,
             params={"s": query, "post_type": "wp-manga"},
             headers=BROWSER_HEADERS,
         )
         if response.status_code != 200:
             return []
 
-        results: list[MangaSearchResult] = []
-        seen: set[str] = set()
+        found: list[tuple[str, str, str]] = []
 
         # O tema envolve cada resultado nesse bloco; dividir por ele isola os
         # campos de um item sem precisar casar a arvore de tags inteira.
@@ -135,22 +180,12 @@ class MadaraSource:
                 continue
 
             slug = self._slug_from_url(url_m.group(1).strip())
-            if not slug or slug in seen:
+            if not slug:
                 continue
-            seen.add(slug)
 
-            title = html.unescape(title_m.group(1).strip())
-            results.append(
-                MangaSearchResult(
-                    source=self.info.id,
-                    source_id=slug,
-                    title=title,
-                    cover_url=_first_image(block),
-                    score=title_score(query, [title]),
-                )
-            )
+            found.append((slug, html.unescape(title_m.group(1).strip()), block))
 
-        return sorted(results, key=lambda item: item.score, reverse=True)[:limit]
+        return found
 
     def _slug_from_url(self, url: str) -> str | None:
         """Extrai o slug do manga de uma URL de resultado da busca."""

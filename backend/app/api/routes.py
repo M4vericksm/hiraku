@@ -41,7 +41,9 @@ async def genres() -> list[GenreInfo]:
 async def search_manga(
     q: str = Query(..., min_length=2),
     source: str | None = Query(default=None),
-    limit: int = Query(default=10, ge=1, le=30),
+    # Teto alto porque `limit` e o total agregado de todas as fontes, nao por
+    # fonte: com cinco fontes vivas, 30 ja da poucas obras de cada uma.
+    limit: int = Query(default=10, ge=1, le=60),
     service: CatalogService = Depends(get_catalog_service),
 ) -> list[MangaSearchResult]:
     try:

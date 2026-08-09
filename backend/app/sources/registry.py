@@ -29,11 +29,12 @@ class SourceRegistry:
 # (`wp-content/themes/madara`, blocos `c-tabs-item__content`) e com a listagem
 # de capitulos vindo pelo AJAX do tema. Sao scans pequenas: domino e markup
 # mudam sem aviso, por isso `risk="high"`.
+# toonlivre.com saiu do ar (o dominio nao resolve mais em DNS). Ficava so
+# gastando o timeout de cada busca para sempre devolver lista vazia.
 PTBR_MADARA_SOURCES = (
     ("kamisama", "Kami Sama Explorer", "https://leitor.kamisama.com.br"),
     ("montetai", "Monte Tai", "https://montetaiscanlator.xyz"),
     ("ninjascan", "Ninja Scan", "https://ninjacomics.xyz"),
-    ("toonlivre", "ToonLivre", "https://toonlivre.com"),
 )
 
 
