@@ -1,5 +1,17 @@
 apply plugin: 'com.android.application'
 
+// Credenciais da chave de release, fora do controle de versao. Sem elas o
+// build cai na chave de debug (`androiddebugkey`), que e publica e identica em
+// toda maquina com o SDK — foi por isso que o Android acusava "app nao seguro"
+// e o Play Protect bloqueava a instalacao. O arquivo pode faltar (clone limpo,
+// CI sem segredos); nesse caso o release sai sem assinatura em vez de quebrar
+// o build inteiro.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 android {
     namespace = "com.hiraku.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,10 +28,28 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (keystoreProperties.containsKey('storeFile')) {
+            release {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                // v1 e v2 juntos: v2 e o que o Android 7+ verifica de verdade,
+                // v1 mantem a instalacao possivel em aparelhos mais antigos.
+                v1SigningEnabled true
+                v2SigningEnabled true
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (keystoreProperties.containsKey('storeFile')) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
