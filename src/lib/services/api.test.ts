@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { resolveImageUrl, BackendApiService, ApiError, AbortedError, isAborted } from './api';
+import {
+	resolveImageUrl,
+	toStorableImageUrl,
+	BackendApiService,
+	ApiError,
+	AbortedError,
+	isAborted
+} from './api';
 
 function jsonResponse(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), {
@@ -29,6 +36,41 @@ describe('resolveImageUrl', () => {
 		expect(resolveImageUrl(undefined)).toBeUndefined();
 		expect(resolveImageUrl(null)).toBeUndefined();
 		expect(resolveImageUrl('')).toBeUndefined();
+	});
+});
+
+describe('toStorableImageUrl', () => {
+	it('strips the API host so a saved cover survives a base change', () => {
+		expect(toStorableImageUrl('http://localhost:8000/image?url=https%3A%2F%2Fx.to%2Fa.webp')).toBe(
+			'/image?url=https%3A%2F%2Fx.to%2Fa.webp'
+		);
+	});
+
+	it('strips a host from another environment, not just the current base', () => {
+		expect(
+			toStorableImageUrl('https://hiraku-api.example.com/image?url=https%3A%2F%2Fx.to%2Fa.webp')
+		).toBe('/image?url=https%3A%2F%2Fx.to%2Fa.webp');
+	});
+
+	it('is idempotent on a value that is already storable', () => {
+		const stored = '/image?url=https%3A%2F%2Fx.to%2Fa.webp';
+		expect(toStorableImageUrl(stored)).toBe(stored);
+	});
+
+	it('round-trips with resolveImageUrl', () => {
+		const stored = '/image?url=https%3A%2F%2Fx.to%2Fa.webp';
+		expect(toStorableImageUrl(resolveImageUrl(stored))).toBe(stored);
+	});
+
+	it('leaves absolute source URLs untouched', () => {
+		const url = 'https://uploads.mangadex.org/covers/a/b.jpg';
+		expect(toStorableImageUrl(url)).toBe(url);
+	});
+
+	it('returns undefined for missing values', () => {
+		expect(toStorableImageUrl(undefined)).toBeUndefined();
+		expect(toStorableImageUrl(null)).toBeUndefined();
+		expect(toStorableImageUrl('')).toBeUndefined();
 	});
 });
 

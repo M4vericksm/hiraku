@@ -3,7 +3,7 @@
 	import VolumeGridSkeleton from '$lib/components/VolumeGridSkeleton.svelte';
 	import { AlertTriangle } from 'lucide-svelte';
 	import type { Manga } from '$lib/stores/manga.svelte';
-	import { ApiError, BackendApiService, isAborted, resolveImageUrl } from '$lib/services/api';
+	import { ApiError, BackendApiService, isAborted } from '$lib/services/api';
 	import { onDestroy } from 'svelte';
 
 	// Obras Principais Canônicas para Exibição Inicial no Catálogo com IDs reais
@@ -118,9 +118,10 @@
 			source: 'mangalivre',
 			title: 'Solo Leveling',
 			author: 'Chugong',
-			coverUrl: resolveImageUrl(
-				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FSolo-Leveling-193x278.webp'
-			),
+			// Sem host: `VolumeCard`/detalhe resolvem na hora de exibir, e o mesmo
+			// valor pode ir para a estante sem congelar o backend de hoje.
+			coverUrl:
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FSolo-Leveling-193x278.webp',
 			description:
 				'Conhecido como o caçador mais fraco de toda a humanidade, Sung Jin-Woo luta pela sobrevivência em masmorras mortais.',
 			progress: 0,
@@ -171,7 +172,7 @@
 				source: item.source,
 				title: item.title,
 				author: item.alt_titles?.[0] || '',
-				coverUrl: resolveImageUrl(item.cover_url),
+				coverUrl: item.cover_url,
 				description: item.description,
 				progress: 0,
 				lastReadPage: 0,

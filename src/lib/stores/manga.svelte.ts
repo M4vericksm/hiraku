@@ -1,3 +1,7 @@
+// Caminho relativo de proposito: em `.svelte.ts` o compilador do Svelte roda
+// antes do alias `$lib` do SvelteKit, e o import por alias quebra no Vitest.
+import { toStorableImageUrl } from '../services/api';
+
 const STORAGE_KEY = 'hiraku-library';
 
 export interface Manga {
@@ -133,6 +137,11 @@ class MangaStore {
 			)
 			.map((m) => ({
 				...m,
+				// Bibliotecas gravadas antes disso guardavam a capa ja resolvida, com o
+				// host do backend embutido ("http://localhost:8000/image?url=..."). Ao
+				// trocar de ambiente aquele host morria e a capa sumia; normalizar na
+				// leitura conserta o que ja esta salvo sem exigir migracao separada.
+				coverUrl: toStorableImageUrl(m.coverUrl),
 				// Mangas gravados antes das pastas nao tem folderIds; e ids orfaos
 				// (pasta excluida por outra aba, JSON editado a mao) sao descartados
 				// para a UI nunca mostrar contagem de uma pasta que nao existe.
@@ -165,6 +174,9 @@ class MangaStore {
 	}
 
 	addManga(manga: Manga) {
+		// A capa entra crua ("/image?url=..."), sem o host do backend: e ele que
+		// muda entre desenvolvimento, producao e app empacotado.
+		manga = { ...manga, coverUrl: toStorableImageUrl(manga.coverUrl) };
 		const existingIndex = this.indexOf(manga.id, manga.source);
 		if (existingIndex >= 0) {
 			const existing = this.library[existingIndex];
