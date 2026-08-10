@@ -32,6 +32,18 @@ const PAGE_RETRY_DELAY_MS = 600;
 /** Quanto tempo a lista de capitulos em cache continua valendo online. */
 const CHAPTER_LIST_TTL_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Teto para a abertura do banco.
+ *
+ * `indexedDB.open` promete disparar `onsuccess`, `onerror` ou `onblocked`, mas
+ * no WebView do Android com armazenamento restrito (modo anonimo, "limpar
+ * dados de sites" agressivo) ele as vezes nao dispara nenhum dos tres. Todo
+ * `await` a jusante ficava pendurado — foi assim que o leitor entrava em
+ * "Carregando Páginas" para sempre, sem erro e sem paginas. Estourado o prazo,
+ * tratamos como "sem armazenamento offline" e seguimos pela rede.
+ */
+const DB_OPEN_TIMEOUT_MS = 8_000;
+
 interface StoredChapter {
 	id: string;
 	/** Esparso enquanto parcial: indices sem pagina ficam vazios. */
@@ -92,9 +104,27 @@ class OfflineService {
 		if (this.opening) return this.opening;
 
 		this.opening = new Promise<IDBDatabase>((resolve, reject) => {
+			if (typeof indexedDB === 'undefined') {
+				reject(new Error('Armazenamento offline indisponível neste dispositivo.'));
+				return;
+			}
+
 			const request = indexedDB.open(this.dbName, this.dbVersion);
 
-			request.onerror = () => reject(request.error);
+			// Rede de seguranca: ver DB_OPEN_TIMEOUT_MS.
+			const timer = setTimeout(() => {
+				reject(new Error('Armazenamento offline não respondeu.'));
+			}, DB_OPEN_TIMEOUT_MS);
+			const settle = <T>(fn: (value: T) => void) => {
+				return (value: T) => {
+					clearTimeout(timer);
+					fn(value);
+				};
+			};
+			const done = settle(resolve);
+			const fail = settle(reject);
+
+			request.onerror = () => fail(request.error);
 			request.onsuccess = () => {
 				const db = request.result;
 				// Outra aba pedindo upgrade: solta a conexao para nao trava-la.
@@ -103,13 +133,13 @@ class OfflineService {
 					this.db = null;
 				};
 				this.db = db;
-				resolve(db);
+				done(db);
 			};
 
 			// Outra aba antiga segura a versao anterior: sem isto o await
 			// pendurava para sempre e a tela ficava em "carregando".
 			request.onblocked = () =>
-				reject(new Error('Feche as outras abas do Hiraku para atualizar o armazenamento.'));
+				fail(new Error('Feche as outras abas do Hiraku para atualizar o armazenamento.'));
 
 			request.onupgradeneeded = () => {
 				const db = request.result;
