@@ -14,6 +14,7 @@
 		type MangaSearchResult
 	} from '$lib/services/api';
 	import { offlineService, StorageFullError } from '$lib/services/offline';
+	import { genreLabel } from '$lib/genres';
 	import {
 		ArrowLeft,
 		BookOpen,
@@ -68,6 +69,11 @@
 	 */
 	const isTitlePending = $derived(!displayTitle);
 
+	/**
+	 * So o que o backend acrescentar a tabela embutida. Quando `/genres` nao
+	 * responde (servidor mais antigo que o app, ou sem rede) isto fica vazio e o
+	 * rotulo em portugues vem de `GENRE_LABELS` — antes a tela caia no slug cru.
+	 */
 	let genreLabels = $state<Record<string, string>>({});
 	const displayGenres = $derived(detail?.genres ?? libraryManga?.genres ?? []);
 
@@ -76,7 +82,7 @@
 			.then((list: GenreInfo[]) => {
 				genreLabels = Object.fromEntries(list.map((g) => [g.slug, g.label]));
 			})
-			.catch((err) => console.error('Falha ao carregar rótulos de gênero', err));
+			.catch((err) => console.debug('Rótulos de gênero do servidor indisponíveis', err));
 	});
 
 	// Capítulo por onde retomar a leitura
@@ -548,7 +554,7 @@
 							<span
 								class="border border-[var(--border)] bg-[var(--bg-primary)] px-2.5 py-1 text-[0.5625rem] font-bold tracking-wider text-[var(--text-muted)] uppercase"
 							>
-								{genreLabels[slug] ?? slug}
+								{genreLabel(slug, genreLabels)}
 							</span>
 						{/each}
 					</div>
