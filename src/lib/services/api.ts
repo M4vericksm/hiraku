@@ -11,6 +11,12 @@ const RETRY_DELAYS_MS = [400, 1200];
 const RETRIABLE_STATUS = new Set([502, 503, 504]);
 
 /**
+ * Teto de `limit` aceito por backends anteriores ao aumento para 60. Serve de
+ * degrau na busca quando o servidor publicado ainda e o antigo.
+ */
+const LEGACY_SEARCH_LIMIT = 30;
+
+/**
  * O backend devolve caminhos relativos ("/image?url=...") para imagens de fontes
  * que nao enviam CORS. Resolve esses caminhos contra a API; URLs absolutas e
  * object URLs (blob:) passam intactas.
@@ -169,6 +175,13 @@ function messageForStatus(status: number): string {
 		return 'O servidor está sobrecarregado. Tente de novo em instantes.';
 	}
 	if (status === 404) return 'Conteúdo não encontrado nesta fonte.';
+	// 422 e o servidor recusando os parametros que mandamos. Acontece quando o
+	// backend publicado e mais antigo que o app (ex.: `limit` acima do teto que
+	// aquela versao aceitava) — sem esta mensagem virava "falha generica" e nao
+	// dava para distinguir de fonte fora do ar.
+	if (status === 422) {
+		return 'O servidor do Hiraku está numa versão mais antiga que o app. Atualize o backend.';
+	}
 	return 'Falha ao comunicar com o servidor.';
 }
 
@@ -249,17 +262,31 @@ export class BackendApiService {
 	 * `limit` e o total agregado de todas as fontes, nao por fonte. Com o
 	 * default do backend (10) e cinco fontes vivas sobravam duas obras por
 	 * fonte, o que parecia busca incompleta.
+	 *
+	 * Se o backend publicado for anterior ao aumento do teto, ele responde 422
+	 * ("limit deve ser <= 30") e a busca inteira falhava com "erro na API". Aqui
+	 * a gente cede: tenta de novo no teto antigo em vez de nao mostrar nada.
 	 */
-	static search(
+	static async search(
 		query: string,
 		source?: string,
 		signal?: AbortSignal,
 		limit = 60
 	): Promise<MangaSearchResult[]> {
-		return request<MangaSearchResult[]>('/manga/search', {
-			params: { q: query, limit: String(limit), ...(source ? { source } : {}) },
-			signal
-		});
+		const call = (value: number) =>
+			request<MangaSearchResult[]>('/manga/search', {
+				params: { q: query, limit: String(value), ...(source ? { source } : {}) },
+				signal
+			});
+
+		try {
+			return await call(limit);
+		} catch (err) {
+			if (err instanceof ApiError && err.status === 422 && limit > LEGACY_SEARCH_LIMIT) {
+				return call(LEGACY_SEARCH_LIMIT);
+			}
+			throw err;
+		}
 	}
 
 	static getDetail(

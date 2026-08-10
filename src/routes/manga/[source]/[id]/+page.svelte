@@ -94,53 +94,86 @@
 
 		let active = true;
 
-		Promise.all([
+		// `Promise.allSettled` e nao `all`: o detalhe e a lista de capitulos sao
+		// chamadas independentes, e o `all` fazia uma derrubar a outra. Uma obra
+		// cujo `/manga/{src}/{id}` falha (capa/sinopse) mas cujos capitulos vem
+		// normalmente aparecia como erro total, sem nada para ler — era esse o
+		// caso das obras da estante que "nao abriam".
+		Promise.allSettled([
 			BackendApiService.getDetail(currentSource, mangaId),
 			BackendApiService.getChapters(currentSource, mangaId)
 		])
 			.then(async ([detailRes, chaptersRes]) => {
 				if (!active) return;
-				detail = detailRes;
-				chapters = chaptersRes;
-				if (chaptersRes && chaptersRes.length > 0) {
-					void offlineService.cacheChapterList(currentSource, mangaId, chaptersRes);
+
+				if (detailRes.status === 'fulfilled') {
+					detail = detailRes.value;
+				} else {
+					console.warn('Falha ao buscar detalhes da obra', detailRes.reason);
 				}
+
+				if (chaptersRes.status === 'fulfilled' && chaptersRes.value.length > 0) {
+					chapters = chaptersRes.value;
+					void offlineService.cacheChapterList(currentSource, mangaId, chaptersRes.value);
+					return;
+				}
+
+				// Sem capitulos online: cai para o cache/offline. Se ali tambem nao
+				// houver nada, ai sim e erro de verdade.
+				const err =
+					chaptersRes.status === 'rejected'
+						? chaptersRes.reason
+						: detailRes.status === 'rejected'
+							? detailRes.reason
+							: null;
+				await fallbackToOffline(currentSource, mangaId, err);
 			})
 			.catch(async (err) => {
 				if (!active) return;
-				console.warn('Falha ao buscar detalhes online, tentando cache/offline:', err);
-
-				const cached = await offlineService.getCachedChapterList(currentSource, mangaId, true);
-				if (cached && cached.length > 0) {
-					chapters = cached;
-					return;
-				}
-
-				const allDownloaded = await offlineService.getDownloadedChaptersList();
-				const relevant = allDownloaded
-					.filter((c) => c.source === currentSource && c.mangaId === mangaId)
-					.map((c) => ({
-						id: c.source + ':::' + c.mangaId + ':::' + c.chapterId,
-						source_id: c.chapterId,
-						manga_source_id: c.mangaId,
-						source: c.source,
-						chapter: c.chapter,
-						title: c.title,
-						volume: undefined
-					}));
-
-				if (relevant.length > 0) {
-					chapters = relevant;
-					return;
-				}
-
-				error = err instanceof ApiError ? err.message : 'Falha ao carregar dados do mangá.';
+				await fallbackToOffline(currentSource, mangaId, err);
 			})
 			.finally(() => {
 				if (active) {
 					isLoading = false;
 				}
 			});
+
+		async function fallbackToOffline(
+			currentSource: string,
+			mangaId: string,
+			err: unknown
+		): Promise<void> {
+			if (err) console.warn('Falha ao buscar capítulos online, tentando cache/offline:', err);
+
+			const cached = await offlineService
+				.getCachedChapterList(currentSource, mangaId, true)
+				.catch(() => undefined);
+			if (!active) return;
+			if (cached && cached.length > 0) {
+				chapters = cached;
+				return;
+			}
+
+			const allDownloaded = await offlineService.getDownloadedChaptersList().catch(() => []);
+			if (!active) return;
+			const relevant = allDownloaded
+				.filter((c) => c.source === currentSource && c.mangaId === mangaId)
+				.map((c) => ({
+					source_id: c.chapterId,
+					manga_source_id: c.mangaId,
+					source: c.source,
+					chapter: c.chapter,
+					title: c.title,
+					volume: undefined
+				}));
+
+			if (relevant.length > 0) {
+				chapters = relevant;
+				return;
+			}
+
+			error = err instanceof ApiError ? err.message : 'Falha ao carregar dados do mangá.';
+		}
 	});
 
 	// ---------------------------------------------------------------------------

@@ -193,17 +193,23 @@
 			})
 			.catch(async (err) => {
 				if (!active) return;
-				console.warn('Falha ao carregar lista de capítulos online no leitor, tentando offline/cache:', err);
-				const cached = await offlineService.getCachedChapterList(currentSource, mangaId, true);
+				console.warn(
+					'Falha ao carregar lista de capítulos online no leitor, tentando offline/cache:',
+					err
+				);
+				const cached = await offlineService
+					.getCachedChapterList(currentSource, mangaId, true)
+					.catch(() => undefined);
+				if (!active) return;
 				if (cached && cached.length > 0) {
 					chapters = cached;
 					return;
 				}
-				const allDownloaded = await offlineService.getDownloadedChaptersList();
+				const allDownloaded = await offlineService.getDownloadedChaptersList().catch(() => []);
+				if (!active) return;
 				const relevant = allDownloaded
 					.filter((c) => c.source === currentSource && c.mangaId === mangaId)
 					.map((c) => ({
-						id: c.source + ':::' + c.mangaId + ':::' + c.chapterId,
 						source_id: c.chapterId,
 						manga_source_id: c.mangaId,
 						source: c.source,
@@ -563,12 +569,21 @@
 			<span class="hanko mb-2 text-xs">エラー</span>
 			<h2 class="masthead mb-2 text-3xl text-white sm:text-4xl">Falha na Leitura</h2>
 			<p class="mb-6 max-w-sm text-xs text-white/70">{error}</p>
-			<a
-				href={resolve('/manga/[source]/[id]', { source, id })}
-				class="border border-[var(--accent)] bg-[var(--accent)] px-6 py-2.5 text-xs font-black tracking-wider text-white uppercase shadow-lg"
-			>
-				Voltar ao Mangá
-			</a>
+			<div class="flex flex-wrap items-center justify-center gap-3">
+				<button
+					type="button"
+					onclick={() => loadChapter(source, id, chapterId)}
+					class="border border-[var(--accent)] bg-[var(--accent)] px-6 py-2.5 text-xs font-black tracking-wider text-white uppercase shadow-lg"
+				>
+					Tentar de novo
+				</button>
+				<a
+					href={resolve('/manga/[source]/[id]', { source, id })}
+					class="border border-white/25 px-6 py-2.5 text-xs font-black tracking-wider text-white/80 uppercase hover:border-[var(--accent)] hover:text-[var(--accent)]"
+				>
+					Voltar ao Mangá
+				</a>
+			</div>
 		</div>
 	{:else}
 		<!-- TOP BAR EDITORIAL -->
