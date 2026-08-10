@@ -1,0 +1,51 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_base:
+        description: 'VITE_API_BASE embutido no APK (ex.: http://192.168.1.42:8000 ou a URL do backend hospedado)'
+        required: false
+        type: string
+  push:
+    branches: [master, claude/front-images-074guk]
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - run: npm ci
+
+      # Sem BASE_PATH: o APK serve o app da raiz, diferente do GitHub Pages.
+      - run: npm run build
+        env:
+          VITE_API_BASE: ${{ github.event.inputs.api_base || vars.VITE_API_BASE || 'http://localhost:8000' }}
+
+      - run: npx cap sync android
+
+      - run: chmod +x android/gradlew
+
+      - run: ./gradlew assembleDebug
+        working-directory: android
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hiraku-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
