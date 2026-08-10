@@ -21,6 +21,27 @@ export function resolveImageUrl(url: string | undefined | null): string | undefi
 	return url;
 }
 
+/**
+ * Inverso de `resolveImageUrl`, para o que vai ser persistido.
+ *
+ * A biblioteca sobrevive a troca de `VITE_API_BASE` — o mesmo navegador acessa
+ * o backend em localhost no desenvolvimento e no dominio publico depois, e o
+ * app empacotado troca de host entre versoes. Guardar a URL ja resolvida
+ * congelava o host antigo e a capa virava um quadro quebrado; guardamos o
+ * caminho do proxy e resolvemos na hora de exibir.
+ *
+ * URLs de fontes com CORS (MangaDex) sao absolutas e nao passam pelo proxy:
+ * essas ficam como estao.
+ */
+export function toStorableImageUrl(url: string | undefined | null): string | undefined {
+	if (!url) return undefined;
+	// Vale para qualquer host, nao so o API_BASE atual: uma biblioteca gravada
+	// antes desta correcao carrega o host que estava valendo naquele dia.
+	const proxyAt = url.indexOf('/image?url=');
+	if (proxyAt > 0) return url.slice(proxyAt);
+	return url;
+}
+
 export interface SourceInfo {
 	id: string;
 	name: string;

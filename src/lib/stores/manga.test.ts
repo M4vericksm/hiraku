@@ -35,6 +35,17 @@ describe('MangaStore.addManga', () => {
 		expect(mangaStore.library[1].title).toBe('First');
 	});
 
+	it('guarda a capa sem o host do backend', () => {
+		mangaStore.addManga(
+			makeManga({
+				id: 'cap',
+				source: 'src',
+				coverUrl: 'http://localhost:8000/image?url=https%3A%2F%2Fx.to%2Fa.webp'
+			})
+		);
+		expect(mangaStore.find('cap', 'src')?.coverUrl).toBe('/image?url=https%3A%2F%2Fx.to%2Fa.webp');
+	});
+
 	it('persists library to localStorage', () => {
 		const manga = makeManga({ title: 'Naruto' });
 		mangaStore.addManga(manga);
@@ -429,6 +440,27 @@ describe('MangaStore storage migration', () => {
 		expect(mangaStore.folders.map((f) => f.name)).toEqual(['Terror']);
 		expect(mangaStore.isMangaInFolder('m1', 'src', folder.id)).toBe(true);
 		expect(mangaStore.find('m1', 'src')?.title).toBe('Round');
+	});
+
+	it('normaliza capas gravadas com o host antigo embutido', () => {
+		// Biblioteca montada em desenvolvimento: o host de localhost estava colado
+		// na URL e a capa sumia ao abrir o app em producao.
+		loadFrom(
+			JSON.stringify([
+				makeManga({
+					id: 'old',
+					source: 'src',
+					coverUrl: 'http://localhost:8000/image?url=https%3A%2F%2Fx.to%2Fa.webp'
+				})
+			])
+		);
+		expect(mangaStore.library[0].coverUrl).toBe('/image?url=https%3A%2F%2Fx.to%2Fa.webp');
+	});
+
+	it('preserva capas absolutas de fontes com CORS', () => {
+		const url = 'https://uploads.mangadex.org/covers/a/b.jpg';
+		loadFrom(JSON.stringify([makeManga({ id: 'old', source: 'src', coverUrl: url })]));
+		expect(mangaStore.library[0].coverUrl).toBe(url);
 	});
 
 	it('survives corrupted JSON without throwing', () => {

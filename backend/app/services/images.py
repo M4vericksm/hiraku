@@ -17,9 +17,11 @@ ALLOWED_HOSTS = {
     "leitor.kamisama.com.br",
     "montetaiscanlator.xyz",
     "ninjacomics.xyz",
-    "toonlivre.com",         # <--- Adicionado
-    "www.toonlivre.com",     # <--- Adicionado
-    "toonlivre.to",
+    "euphoriascan.com",
+    "fbsquadx.com",
+    "ghostscan.xyz",
+    "inkapk.net",
+    "hanamiheaven.org",
 }
 
 ALLOWED_HOST_SUFFIXES = (
@@ -31,8 +33,11 @@ ALLOWED_HOST_SUFFIXES = (
     ".kamisama.com.br",
     ".montetaiscanlator.xyz",
     ".ninjacomics.xyz",
-    ".toonlivre.com",        # <--- Adicionado
-    ".toonlivre.to",
+    ".euphoriascan.com",
+    ".fbsquadx.com",
+    ".ghostscan.xyz",
+    ".inkapk.net",
+    ".hanamiheaven.org",
 )
 
 # Sites Madara checam Referer nas imagens de capitulo; sem ele vem 403.
@@ -41,8 +46,11 @@ REFERERS = {
     "kamisama.com.br": "https://leitor.kamisama.com.br/",
     "montetaiscanlator.xyz": "https://montetaiscanlator.xyz/",
     "ninjacomics.xyz": "https://ninjacomics.xyz/",
-    "toonlivre.com": "https://toonlivre.com/", # <--- Adicionado
-    "toonlivre.to": "https://toonlivre.to/",
+    "euphoriascan.com": "https://euphoriascan.com/",
+    "fbsquadx.com": "https://fbsquadx.com/",
+    "ghostscan.xyz": "https://ghostscan.xyz/",
+    "inkapk.net": "https://inkapk.net/",
+    "hanamiheaven.org": "https://hanamiheaven.org/",
 }
 
 BROWSER_USER_AGENT = (

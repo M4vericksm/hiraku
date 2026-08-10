@@ -3,6 +3,7 @@
 	import { onMount, untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { mangaStore, type Manga } from '$lib/stores/manga.svelte';
+	import { recallPreview } from '$lib/stores/preview';
 	import { cn } from '$lib/utils';
 	import {
 		ApiError,
@@ -37,10 +38,28 @@
 	let isLoading = $state(true);
 	let error = $state<string | null>(null);
 
-	// Dados resolvidos preferindo backend com fallback à biblioteca local
-	const displayTitle = $derived(detail?.title || libraryManga?.title || 'Manga');
-	const displayCover = $derived(resolveImageUrl(detail?.cover_url) || libraryManga?.coverUrl);
+	/**
+	 * Titulo e capa que a lista de origem ja mostrava. Sem isso a tela abria com
+	 * o texto "Manga" e um quadro vazio ate a requisicao voltar — a obra vinda do
+	 * catalogo nao esta na biblioteca, entao nao havia fallback nenhum.
+	 */
+	const preview = $derived(recallPreview(source, id));
+
+	// Preferimos o backend; ate ele responder valem a biblioteca local e o
+	// preview do card clicado, nessa ordem.
+	const displayTitle = $derived(detail?.title || libraryManga?.title || preview?.title || '');
+	const displayCover = $derived(
+		resolveImageUrl(detail?.cover_url) ||
+			resolveImageUrl(libraryManga?.coverUrl) ||
+			preview?.coverUrl
+	);
 	const displayDescription = $derived(detail?.description ?? libraryManga?.description);
+
+	/**
+	 * So o masthead: enquanto nao houver titulo nenhum para mostrar, a barra de
+	 * titulo vira esqueleto em vez de exibir um nome inventado.
+	 */
+	const isTitlePending = $derived(!displayTitle);
 
 	let genreLabels = $state<Record<string, string>>({});
 	const displayGenres = $derived(detail?.genres ?? libraryManga?.genres ?? []);
@@ -87,6 +106,9 @@
 		if (inLibrary) {
 			mangaStore.removeManga(id, source);
 		} else {
+			// Sem titulo ainda seria uma entrada em branco na estante; o botao ja
+			// fica desabilitado nesse estado, isso aqui e a rede de seguranca.
+			if (!displayTitle) return;
 			const newManga: Manga = {
 				id,
 				source,
@@ -178,7 +200,7 @@
 </script>
 
 <svelte:head>
-	<title>{displayTitle} • Hiraku</title>
+	<title>{displayTitle ? `${displayTitle} • Hiraku` : 'Hiraku'}</title>
 </svelte:head>
 
 <main class="min-h-screen px-4 pt-6 pb-28 text-[var(--text-primary)] sm:px-8 xl:px-14">
@@ -218,6 +240,9 @@
 			>
 				{#if displayCover}
 					<img src={displayCover} alt="Capa de {displayTitle}" class="h-full w-full object-cover" />
+				{:else if isLoading}
+					<!-- Sem capa e sem dado ainda: pulsa em vez de fingir uma capa vazia. -->
+					<div class="h-full w-full animate-pulse bg-[var(--bg-accent)]"></div>
 				{:else}
 					<div class="halftone flex h-full w-full flex-col justify-between p-4">
 						<span class="hanko text-[0.5rem]">{source.toUpperCase()}</span>
@@ -238,9 +263,13 @@
 					{/if}
 				</div>
 
-				<h1 class="masthead text-3xl text-[var(--text-primary)] sm:text-5xl">
-					{displayTitle}
-				</h1>
+				{#if isTitlePending}
+					<div class="h-9 w-3/4 animate-pulse bg-[var(--bg-accent)] sm:h-12"></div>
+				{:else}
+					<h1 class="masthead text-3xl text-[var(--text-primary)] sm:text-5xl">
+						{displayTitle}
+					</h1>
+				{/if}
 
 				<!-- Chips de Gênero -->
 				{#if displayGenres.length > 0}
@@ -260,7 +289,8 @@
 					<button
 						type="button"
 						onclick={toggleLibrary}
-						class="flex items-center gap-2 border border-[var(--rule)] bg-[var(--bg-primary)] px-5 py-2.5 text-xs font-bold tracking-wider text-[var(--text-primary)] uppercase transition-all hover:border-[var(--accent)] hover:text-[var(--accent)]"
+						disabled={isTitlePending}
+						class="flex items-center gap-2 border border-[var(--rule)] bg-[var(--bg-primary)] px-5 py-2.5 text-xs font-bold tracking-wider text-[var(--text-primary)] uppercase transition-all hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50"
 					>
 						{#if inLibrary}
 							<BookmarkMinus class="h-4 w-4 text-[var(--accent)]" />

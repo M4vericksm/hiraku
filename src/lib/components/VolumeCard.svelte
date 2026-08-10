@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { resolveImageUrl } from '$lib/services/api';
 	import type { Manga } from '$lib/stores/manga.svelte';
+	import { rememberPreview } from '$lib/stores/preview';
 	import { cn } from '$lib/utils';
 
 	interface Props {
@@ -8,6 +10,9 @@
 	}
 
 	let { entry }: Props = $props();
+
+	// A biblioteca guarda a capa sem o host do backend; o host entra so aqui.
+	const coverUrl = $derived(resolveImageUrl(entry.coverUrl));
 
 	let imageLoaded = $state(false);
 	let imageError = $state(false);
@@ -35,14 +40,15 @@
 <a
 	href={resolve('/manga/[source]/[id]', { source: entry.source, id: entry.id })}
 	class="group relative block w-full select-none"
+	onclick={() => rememberPreview(entry.source, entry.id, { title: entry.title, coverUrl })}
 >
 	<div
 		class="volume registration relative aspect-[2/3] w-full overflow-hidden border border-[var(--rule)] bg-[var(--bg-secondary)] shadow-md transition-all duration-300 group-hover:-translate-y-1.5 group-hover:border-[var(--accent)] group-hover:shadow-[0_15px_30px_rgba(0,0,0,0.4)]"
 	>
 		<!-- Capa do Mangá ou Fallback Tipográfico Tategaki -->
-		{#if entry.coverUrl && !imageError}
+		{#if coverUrl && !imageError}
 			<img
-				src={entry.coverUrl}
+				src={coverUrl}
 				alt={entry.title}
 				loading="lazy"
 				class={cn(
@@ -54,7 +60,7 @@
 			/>
 		{/if}
 
-		{#if !entry.coverUrl || imageError || !imageLoaded}
+		{#if !coverUrl || imageError || !imageLoaded}
 			<div
 				class={cn(
 					'halftone absolute inset-0 flex flex-col justify-between bg-[var(--bg-secondary)] p-4',
