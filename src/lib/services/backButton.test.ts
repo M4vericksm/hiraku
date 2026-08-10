@@ -18,87 +18,153 @@ vi.mock('@capacitor/app', () => ({
 	}
 }));
 
-const HISTORY_INDEX = 'sveltekit:history';
+/** Faz o papel do `goto` do SvelteKit, injetado pelo layout. */
+const goto = vi.fn();
 
-/** Simula o state que o roteador do SvelteKit grava em cada navegacao. */
-function setHistoryIndex(value: number | null) {
-	history.replaceState(value === null ? null : { [HISTORY_INDEX]: value }, '');
+/** Coloca o WebView numa rota, como o roteador faria. */
+function setPath(path: string) {
+	history.replaceState(null, '', path);
 }
 
 describe('botao voltar do Android', () => {
 	let initBackButton: typeof import('./backButton').initBackButton;
 	let destroyBackButton: typeof import('./backButton').destroyBackButton;
 	let pushBackHandler: typeof import('./backButton').pushBackHandler;
+	let trackNavigation: typeof import('./backButton').trackNavigation;
+	let setExitPrompt: typeof import('./backButton').setExitPrompt;
+	let setHomeNavigation: typeof import('./backButton').setHomeNavigation;
 	let back: ReturnType<typeof vi.spyOn>;
 
 	beforeEach(async () => {
 		vi.clearAllMocks();
 		backCallback = null;
-		// Modulo tem estado no escopo do arquivo (baseIndex, listener): recarrega.
+		// Modulo tem estado no escopo do arquivo (depth, listener): recarrega.
 		vi.resetModules();
 		const mod = await import('./backButton');
 		initBackButton = mod.initBackButton;
 		destroyBackButton = mod.destroyBackButton;
 		pushBackHandler = mod.pushBackHandler;
+		trackNavigation = mod.trackNavigation;
+		setExitPrompt = mod.setExitPrompt;
+		setHomeNavigation = mod.setHomeNavigation;
+		setHomeNavigation('/', goto);
 		back = vi.spyOn(history, 'back').mockImplementation(() => {});
+		setPath('/');
 	});
 
 	it('volta no historico quando ha telas empilhadas', async () => {
-		setHistoryIndex(0);
 		await initBackButton();
+		trackNavigation('enter');
 
-		// Navegou duas telas adiante.
-		setHistoryIndex(2);
+		// Catalogo -> obra -> leitor.
+		trackNavigation('link');
+		trackNavigation('link');
+		setPath('/reader/mangadex/abc/cap-1');
+
 		backCallback?.();
 
 		expect(back).toHaveBeenCalledOnce();
 		expect(exitApp).not.toHaveBeenCalled();
 	});
 
-	it('fecha o app apenas na tela inicial', async () => {
-		setHistoryIndex(5);
+	it('nao fecha o app no primeiro toque na tela inicial', async () => {
+		// Regressao: a base do contador era fixada tarde demais, a profundidade
+		// dava sempre 0 e o primeiro toque fechava o app de qualquer tela.
 		await initBackButton();
+		trackNavigation('enter');
 
-		// Mesmo indice do momento em que o app abriu: nao ha para onde voltar.
 		backCallback?.();
 
-		expect(back).not.toHaveBeenCalled();
-		expect(exitApp).toHaveBeenCalledOnce();
-	});
-
-	it('le a chave do SvelteKit, nao um "index" generico', async () => {
-		// Regressao: uma versao anterior lia `history.state.index`, que o roteador
-		// nunca grava. A profundidade dava sempre 0 e o app fechava de qualquer tela.
-		setHistoryIndex(0);
-		await initBackButton();
-
-		history.replaceState({ index: 9 }, '');
-		backCallback?.();
-
-		// Sem a chave certa nao da para medir: nao fecha o app por engano.
+		expect(exitApp).not.toHaveBeenCalled();
 		expect(back).not.toHaveBeenCalled();
 	});
 
-	it('fixa a base na primeira leitura valida quando o roteador ainda nao hidratou', async () => {
-		// onMount do layout pode rodar antes do roteador gravar o state.
-		setHistoryIndex(null);
+	it('fecha o app no segundo toque seguido na tela inicial', async () => {
 		await initBackButton();
+		trackNavigation('enter');
 
-		// Primeira leitura valida vira a base: ainda e a tela inicial.
-		setHistoryIndex(3);
 		backCallback?.();
-		expect(exitApp).toHaveBeenCalledOnce();
+		backCallback?.();
 
-		// Uma tela adiante da base agora volta.
-		setHistoryIndex(4);
+		expect(exitApp).toHaveBeenCalledOnce();
+	});
+
+	it('avisa antes de sair, para o duplo toque nao parecer um botao quebrado', async () => {
+		await initBackButton();
+		trackNavigation('enter');
+
+		const prompt = vi.fn();
+		setExitPrompt(prompt);
+		backCallback?.();
+
+		expect(prompt).toHaveBeenCalledOnce();
+	});
+
+	it('esquece a confirmacao depois da janela de 2s', async () => {
+		vi.useFakeTimers();
+		try {
+			await initBackButton();
+			trackNavigation('enter');
+
+			backCallback?.();
+			vi.advanceTimersByTime(2500);
+			backCallback?.();
+
+			// O segundo toque veio tarde: rearma em vez de fechar.
+			expect(exitApp).not.toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('vai para a estante quando abriu direto numa rota profunda', async () => {
+		// Recarregar dentro do leitor zera a profundidade; fechar o app ali seria
+		// pior que subir uma tela.
+		await initBackButton();
+		setPath('/reader/mangadex/abc/cap-1');
+		trackNavigation('enter');
+
+		backCallback?.();
+
+		expect(goto).toHaveBeenCalledWith('/');
+		expect(exitApp).not.toHaveBeenCalled();
+	});
+
+	it('desconta a profundidade ao voltar', async () => {
+		await initBackButton();
+		trackNavigation('enter');
+		trackNavigation('link');
+		setPath('/manga/mangadex/abc');
+
 		backCallback?.();
 		expect(back).toHaveBeenCalledOnce();
+
+		// O roteador confirma o retorno; agora estamos na raiz de novo.
+		trackNavigation('popstate');
+		setPath('/');
+		backCallback?.();
+
+		// Nao volta mais: so arma a saida.
+		expect(back).toHaveBeenCalledOnce();
+		expect(exitApp).not.toHaveBeenCalled();
+	});
+
+	it('nao conta replaceState como uma tela nova', async () => {
+		// O leitor troca a URL do capitulo sem empilhar; contar isso faria o
+		// botao voltar precisar de varios toques para sair de uma tela so.
+		await initBackButton();
+		trackNavigation('enter');
+		trackNavigation('replaceState');
+
+		backCallback?.();
+
+		expect(back).not.toHaveBeenCalled();
 	});
 
 	it('deixa um handler consumir o evento antes de navegar', async () => {
-		setHistoryIndex(0);
 		await initBackButton();
-		setHistoryIndex(3);
+		trackNavigation('enter');
+		trackNavigation('link');
 
 		const release = pushBackHandler(() => true);
 		backCallback?.();
@@ -113,9 +179,9 @@ describe('botao voltar do Android', () => {
 	});
 
 	it('passa para o proximo handler quando o de cima nao consome', async () => {
-		setHistoryIndex(0);
 		await initBackButton();
-		setHistoryIndex(3);
+		trackNavigation('enter');
+		trackNavigation('link');
 
 		const order: string[] = [];
 		pushBackHandler(() => {
@@ -135,9 +201,9 @@ describe('botao voltar do Android', () => {
 	});
 
 	it('um handler que lanca nao impede os demais', async () => {
-		setHistoryIndex(0);
 		await initBackButton();
-		setHistoryIndex(3);
+		trackNavigation('enter');
+		trackNavigation('link');
 
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 		pushBackHandler(() => {
@@ -150,7 +216,6 @@ describe('botao voltar do Android', () => {
 
 	it('nao registra o listener duas vezes', async () => {
 		const { App } = await import('@capacitor/app');
-		setHistoryIndex(0);
 
 		await initBackButton();
 		await initBackButton();

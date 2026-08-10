@@ -6,10 +6,28 @@
 	import { cn } from '$lib/utils';
 	import { preferences } from '$lib/stores/preferences.svelte';
 	import { mangaStore } from '$lib/stores/manga.svelte';
-	import { initBackButton, destroyBackButton } from '$lib/services/backButton';
+	import { afterNavigate, goto } from '$app/navigation';
+	import {
+		initBackButton,
+		destroyBackButton,
+		setExitPrompt,
+		setHomeNavigation,
+		trackNavigation
+	} from '$lib/services/backButton';
 	import { Settings, Library, Compass, HardDrive } from 'lucide-svelte';
 
 	let { children } = $props();
+
+	/**
+	 * O contador de profundidade do botao voltar. Ler do roteador aqui e a unica
+	 * forma confiavel: `history.state` do SvelteKit so existe depois da
+	 * hidratacao, e no WebView do Capacitor isso chega tarde demais.
+	 */
+	afterNavigate((nav) => trackNavigation(nav.type));
+
+	/** Aviso do "toque de novo para sair", so na estante. */
+	let exitHint = $state(false);
+	let exitHintTimer: ReturnType<typeof setTimeout>;
 
 	// O tema vem do store; trocar aplica na hora, sem recarregar a pagina.
 	const currentTheme = $derived(preferences.theme);
@@ -17,12 +35,25 @@
 	onMount(() => {
 		void initBackButton();
 
+		// O servico do botao voltar nao importa o roteador: quem sabe a rota
+		// inicial (e o `base` do adapter) e o layout.
+		setHomeNavigation(`${base}/`, (path) => void goto(path));
+
+		setExitPrompt(() => {
+			exitHint = true;
+			clearTimeout(exitHintTimer);
+			exitHintTimer = setTimeout(() => (exitHint = false), 2000);
+		});
+
 		if ('serviceWorker' in navigator) {
 			const swUrl = `${base}/sw.js`;
 			void navigator.serviceWorker.register(swUrl);
 		}
 
-		return () => void destroyBackButton();
+		return () => {
+			clearTimeout(exitHintTimer);
+			void destroyBackButton();
+		};
 	});
 
 	const isReader = $derived(page.route.id?.startsWith('/reader'));
@@ -234,4 +265,19 @@
 			{@render children()}
 		{/if}
 	</div>
+
+	<!--
+		Confirmacao de saida: o primeiro toque no botao voltar da estante mostra
+		isto, o segundo (dentro de 2s) fecha o app. Sem o aviso o duplo toque
+		pareceria um botao que simplesmente nao funciona.
+	-->
+	{#if exitHint}
+		<div
+			role="status"
+			aria-live="polite"
+			class="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-1/2 z-200 -translate-x-1/2 border border-[var(--accent)] bg-[var(--bg-secondary)] px-4 py-2.5 font-mono text-[0.625rem] font-bold tracking-widest text-[var(--text-primary)] uppercase shadow-2xl"
+		>
+			Toque de novo para sair
+		</div>
+	{/if}
 </div>
