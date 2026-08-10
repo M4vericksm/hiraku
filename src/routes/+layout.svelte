@@ -7,7 +7,7 @@
 	import { preferences } from '$lib/stores/preferences.svelte';
 	import { mangaStore } from '$lib/stores/manga.svelte';
 	import { initBackButton, destroyBackButton } from '$lib/services/backButton';
-	import { Settings, Library, Compass } from 'lucide-svelte';
+	import { Settings, Library, Compass, HardDrive } from 'lucide-svelte';
 
 	let { children } = $props();
 
@@ -35,6 +35,13 @@
 			label: 'Catálogo',
 			kanji: '探索',
 			icon: Compass
+		},
+		{
+			route: '/downloads',
+			href: resolve('/downloads'),
+			label: 'Baixados',
+			kanji: '保存',
+			icon: HardDrive
 		},
 		{
 			route: '/settings',
@@ -220,7 +227,7 @@
 	<div
 		class={cn(
 			!isReader &&
-				'px-4 pt-5 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 xl:pt-8 xl:pr-10 xl:pb-10 xl:pl-[calc(16rem+2.5rem)]'
+				'px-4 pt-[calc(1.25rem+env(safe-area-inset-top))] pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 xl:pt-8 xl:pr-10 xl:pb-10 xl:pl-[calc(16rem+2.5rem)]'
 		)}
 	>
 		{#if children}

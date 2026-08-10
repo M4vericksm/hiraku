@@ -140,6 +140,62 @@ describe('MangaStore chapter read state', () => {
 		expect(() => mangaStore.markChapterRead('ghost', 'src', 'c1')).not.toThrow();
 		expect(mangaStore.isChapterRead('ghost', 'src', 'c1')).toBe(false);
 	});
+
+	it('desmarca um capitulo lido', () => {
+		mangaStore.addManga(makeManga({ id: 'un', source: 'src' }));
+		mangaStore.markChapterRead('un', 'src', 'c1');
+		mangaStore.markChapterUnread('un', 'src', 'c1');
+		expect(mangaStore.isChapterRead('un', 'src', 'c1')).toBe(false);
+	});
+
+	it('desmarcar o que nunca foi lido nao quebra nem inventa entrada', () => {
+		mangaStore.addManga(makeManga({ id: 'un2', source: 'src' }));
+		expect(() => mangaStore.markChapterUnread('un2', 'src', 'nada')).not.toThrow();
+		expect(mangaStore.find('un2', 'src')?.readChapterIds ?? []).toEqual([]);
+	});
+
+	it('desmarca so o alvo, preservando os outros lidos', () => {
+		mangaStore.addManga(makeManga({ id: 'sel', source: 'src' }));
+		mangaStore.setChaptersRead('sel', 'src', ['c1', 'c2', 'c3'], true);
+		mangaStore.markChapterUnread('sel', 'src', 'c2');
+		expect(mangaStore.find('sel', 'src')?.readChapterIds).toEqual(['c1', 'c3']);
+	});
+});
+
+describe('MangaStore.setChaptersRead', () => {
+	it('marca varios capitulos numa unica escrita', () => {
+		mangaStore.addManga(makeManga({ id: 'b', source: 'src' }));
+		mangaStore.setChaptersRead('b', 'src', ['c1', 'c2', 'c3'], true);
+		expect(mangaStore.find('b', 'src')?.readChapterIds).toEqual(['c1', 'c2', 'c3']);
+	});
+
+	it('desmarca varios de uma vez', () => {
+		mangaStore.addManga(makeManga({ id: 'b2', source: 'src' }));
+		mangaStore.setChaptersRead('b2', 'src', ['c1', 'c2', 'c3'], true);
+		mangaStore.setChaptersRead('b2', 'src', ['c1', 'c3'], false);
+		expect(mangaStore.find('b2', 'src')?.readChapterIds).toEqual(['c2']);
+	});
+
+	it('nao duplica o que ja estava lido', () => {
+		mangaStore.addManga(makeManga({ id: 'b3', source: 'src' }));
+		mangaStore.markChapterRead('b3', 'src', 'c1');
+		mangaStore.setChaptersRead('b3', 'src', ['c1', 'c2'], true);
+		expect(mangaStore.find('b3', 'src')?.readChapterIds).toEqual(['c1', 'c2']);
+	});
+
+	it('lista vazia e manga fora da biblioteca sao no-op', () => {
+		mangaStore.addManga(makeManga({ id: 'b4', source: 'src' }));
+		expect(() => mangaStore.setChaptersRead('b4', 'src', [], true)).not.toThrow();
+		expect(() => mangaStore.setChaptersRead('ghost', 'src', ['c1'], true)).not.toThrow();
+		expect(mangaStore.find('b4', 'src')?.readChapterIds ?? []).toEqual([]);
+	});
+
+	it('persiste no storage — a selecao sobrevive ao reload', () => {
+		mangaStore.addManga(makeManga({ id: 'b5', source: 'src' }));
+		mangaStore.setChaptersRead('b5', 'src', ['c1', 'c2'], true);
+		mangaStore.loadFromStorage();
+		expect(mangaStore.find('b5', 'src')?.readChapterIds).toEqual(['c1', 'c2']);
+	});
 });
 
 describe('MangaStore.removeManga', () => {

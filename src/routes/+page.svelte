@@ -177,7 +177,7 @@
 						type="button"
 						aria-label="Excluir coleção {folder.name}"
 						onclick={() => handleDeleteFolder(folder.id)}
-						class="ml-1 text-[0.625rem] text-[var(--text-muted)] hover:text-[var(--accent)]"
+						class="-ml-1 flex h-11 w-8 items-center justify-center text-sm text-[var(--text-muted)] hover:text-[var(--accent)]"
 					>
 						×
 					</button>

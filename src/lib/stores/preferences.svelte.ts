@@ -3,7 +3,32 @@ const STORAGE_KEY = 'hiraku-preferences';
 /** Chave antiga, migrada na primeira carga. */
 const LEGACY_THEME_KEY = 'hiraku-theme';
 
-export type ReadingMode = 'rtl' | 'vertical';
+/**
+ * `ltr` e `rtl` sao os dois sentidos do modo paginado; `vertical` e a rolagem
+ * continua. O sentido importa: em `rtl` a pagina seguinte fica a esquerda, que
+ * e como se le mangá japones — e o oposto do que a maioria das obras PT-BR
+ * (manhwa/webtoon traduzido) espera.
+ */
+export type ReadingMode = 'ltr' | 'rtl' | 'vertical';
+
+const READING_MODES: readonly ReadingMode[] = ['ltr', 'rtl', 'vertical'];
+
+function isReadingMode(value: unknown): value is ReadingMode {
+	return READING_MODES.includes(value as ReadingMode);
+}
+
+/**
+ * Para que lado da historia anda quem aperta a seta `side`.
+ *
+ * Ficava embutido no leitor e sem teste: como o padrao era `rtl`, a seta
+ * direita chamava "pagina anterior" e, na pagina 1, isso saltava o capitulo
+ * inteiro para tras — parecia que a seta pulava capitulo em vez de pagina.
+ */
+export function pageDirection(mode: ReadingMode, side: 'left' | 'right'): 'next' | 'prev' | 'none' {
+	if (mode === 'vertical') return 'none';
+	const forward = mode === 'rtl' ? 'left' : 'right';
+	return side === forward ? 'next' : 'prev';
+}
 
 /**
  * Velocidades do auto-scroll. Cada nivel vale para os dois modos de leitura:
@@ -40,7 +65,10 @@ interface PersistedPreferences {
 
 const DEFAULTS: PersistedPreferences = {
 	theme: 'theme-ink',
-	readingMode: 'rtl',
+	// Padrao LTR: as fontes PT-BR sao majoritariamente manhwa/webtoon, lidos da
+	// esquerda para a direita. Com o padrao antigo (`rtl`) a seta direita virava
+	// "pagina anterior" e, ja na pagina 1, saltava para o capitulo anterior.
+	readingMode: 'ltr',
 	autoScrollSpeedLevel: DEFAULT_SPEED_LEVEL,
 	language: 'pt-br',
 	dataSaver: false
@@ -82,7 +110,7 @@ class PreferencesStore {
 		if (legacyTheme && !stored.theme) stored.theme = legacyTheme;
 
 		if (typeof stored.theme === 'string') this.theme = stored.theme;
-		if (stored.readingMode === 'rtl' || stored.readingMode === 'vertical') {
+		if (isReadingMode(stored.readingMode)) {
 			this.readingMode = stored.readingMode;
 		}
 		if (typeof stored.language === 'string') this.language = stored.language;

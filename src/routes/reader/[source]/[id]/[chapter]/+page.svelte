@@ -5,7 +5,12 @@
 	import { mangaStore } from '$lib/stores/manga.svelte';
 	import { ApiError, BackendApiService, resolveImageUrl, type Chapter } from '$lib/services/api';
 	import { offlineService } from '$lib/services/offline';
-	import { preferences, SCROLL_SPEEDS, type ReadingMode } from '$lib/stores/preferences.svelte';
+	import {
+		pageDirection,
+		preferences,
+		SCROLL_SPEEDS,
+		type ReadingMode
+	} from '$lib/stores/preferences.svelte';
 	import { pushBackHandler } from '$lib/services/backButton';
 	import {
 		ArrowLeft,
@@ -75,7 +80,8 @@
 	let touchStartY = 0;
 
 	const READING_MODES: { value: ReadingMode; label: string; kanji: string }[] = [
-		{ value: 'rtl', label: 'Paginado (RTL Mangá)', kanji: '頁' },
+		{ value: 'ltr', label: 'Paginado (Esq. → Dir.)', kanji: '左開' },
+		{ value: 'rtl', label: 'Paginado (Dir. → Esq., mangá)', kanji: '右開' },
 		{ value: 'vertical', label: 'Scroll Contínuo', kanji: '巻' }
 	];
 
@@ -97,24 +103,37 @@
 		isAutoScrolling = false;
 
 		try {
-			const downloaded = await offlineService.isChapterDownloaded(
+			const downloaded = await offlineService.getChapterStatus(
 				currentSource,
 				mangaId,
 				currentChapterId
 			);
 
+			// Um parcial vale a leitura quando nao ha rede: as paginas que
+			// existem estao no disco, e ir para a rede so daria tela de erro.
+			// Com rede, o online e melhor — traz o capitulo inteiro.
+			const isOnline = typeof navigator === 'undefined' || navigator.onLine;
+			const useOffline = downloaded?.status === 'complete' || (!!downloaded && !isOnline);
+
 			let urls: string[];
 			let offline: boolean;
 
-			if (downloaded) {
+			if (useOffline) {
 				urls = await offlineService.getOfflinePages(currentSource, mangaId, currentChapterId);
 				offline = true;
 			} else {
-				const res = await BackendApiService.getPages(currentSource, currentChapterId);
-				urls = res.page_urls
-					.map((url) => resolveImageUrl(url))
-					.filter((url): url is string => !!url);
-				offline = false;
+				try {
+					const res = await BackendApiService.getPages(currentSource, currentChapterId);
+					urls = res.page_urls
+						.map((url) => resolveImageUrl(url))
+						.filter((url): url is string => !!url);
+					offline = false;
+				} catch (err) {
+					// A rede caiu no meio: o parcial no disco e melhor que um erro.
+					if (!downloaded) throw err;
+					urls = await offlineService.getOfflinePages(currentSource, mangaId, currentChapterId);
+					offline = true;
+				}
 			}
 
 			if (token !== loadToken) {
@@ -163,9 +182,43 @@
 		const mangaId = id;
 		if (!currentSource || !mangaId) return;
 
+		let active = true;
 		BackendApiService.getChapters(currentSource, mangaId)
-			.then((res) => (chapters = res))
-			.catch((err) => console.error('Falha ao carregar lista de capítulos', err));
+			.then(async (res) => {
+				if (!active) return;
+				chapters = res;
+				if (res && res.length > 0) {
+					void offlineService.cacheChapterList(currentSource, mangaId, res);
+				}
+			})
+			.catch(async (err) => {
+				if (!active) return;
+				console.warn('Falha ao carregar lista de capítulos online no leitor, tentando offline/cache:', err);
+				const cached = await offlineService.getCachedChapterList(currentSource, mangaId, true);
+				if (cached && cached.length > 0) {
+					chapters = cached;
+					return;
+				}
+				const allDownloaded = await offlineService.getDownloadedChaptersList();
+				const relevant = allDownloaded
+					.filter((c) => c.source === currentSource && c.mangaId === mangaId)
+					.map((c) => ({
+						id: c.source + ':::' + c.mangaId + ':::' + c.chapterId,
+						source_id: c.chapterId,
+						manga_source_id: c.mangaId,
+						source: c.source,
+						chapter: c.chapter,
+						title: c.title,
+						volume: undefined
+					}));
+				if (relevant.length > 0) {
+					chapters = relevant;
+				}
+			});
+
+		return () => {
+			active = false;
+		};
 	});
 
 	$effect(() => {
@@ -309,14 +362,21 @@
 		}
 	}
 
-	function pageRight() {
-		if (readingMode === 'rtl') prev();
-		else next();
+	function turnPage(side: 'left' | 'right') {
+		const action = pageDirection(readingMode, side);
+		if (action === 'next') next();
+		else if (action === 'prev') prev();
 	}
 
-	function pageLeft() {
-		if (readingMode === 'rtl') next();
-		else prev();
+	const pageRight = () => turnPage('right');
+	const pageLeft = () => turnPage('left');
+
+	/** Botao do rodape so apaga quando nao ha nem pagina nem capitulo naquele lado. */
+	function isTurnBlocked(side: 'left' | 'right'): boolean {
+		const action = pageDirection(readingMode, side);
+		if (action === 'next') return currentPage >= pageUrls.length && !nextChapter;
+		if (action === 'prev') return currentPage <= 1 && !prevChapter;
+		return true;
 	}
 
 	function handleKeyDown(e: KeyboardEvent) {
@@ -514,7 +574,10 @@
 		<!-- TOP BAR EDITORIAL -->
 		<header
 			class={cn(
-				'absolute top-0 right-0 left-0 z-50 flex items-center justify-between border-b border-white/10 bg-black/90 px-4 py-3 text-white backdrop-blur-md transition-all duration-300 sm:px-6',
+				// pt/pb com safe-area: o container e `fixed inset-0` sob
+				// `viewport-fit=cover`, entao sem isto o header some atras da
+				// status bar e o rodape atras da barra de gestos.
+				'absolute top-0 right-0 left-0 z-50 flex items-center justify-between border-b border-white/10 bg-black/90 px-4 py-3 pt-[calc(0.75rem+env(safe-area-inset-top))] text-white backdrop-blur-md transition-all duration-300 sm:px-6',
 				isControlsVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
 			)}
 		>
@@ -596,8 +659,13 @@
 					<span>{preferences.scrollSpeed.level}x</span>
 				</button>
 
-				<div class="mx-1 h-4 w-px bg-white/20"></div>
+				<div class="mx-1 hidden h-4 w-px bg-white/20 sm:block"></div>
 
+				<!--
+					Zoom escondido no telefone: os controles fixos do header somam mais
+					que a largura de uma tela de 360px e empurravam o titulo do capitulo
+					para fora. No telefone o mesmo controle vive no painel lateral.
+				-->
 				<button
 					type="button"
 					onclick={(e) => {
@@ -605,12 +673,12 @@
 						zoomOut();
 					}}
 					disabled={zoomLevel <= MIN_ZOOM}
-					class="flex h-8 w-8 items-center justify-center border border-white/10 hover:border-[var(--accent)] disabled:opacity-30"
+					class="hidden h-8 w-8 items-center justify-center border border-white/10 hover:border-[var(--accent)] disabled:opacity-30 sm:flex"
 					title="Diminuir Zoom (-)"
 				>
 					<ZoomOut class="h-3.5 w-3.5" />
 				</button>
-				<span class="w-10 text-center font-mono text-xs font-bold sm:w-12">
+				<span class="hidden w-10 text-center font-mono text-xs font-bold sm:inline sm:w-12">
 					{Math.round(zoomLevel * 100)}%
 				</span>
 				<button
@@ -620,13 +688,13 @@
 						zoomIn();
 					}}
 					disabled={zoomLevel >= MAX_ZOOM}
-					class="flex h-8 w-8 items-center justify-center border border-white/10 hover:border-[var(--accent)] disabled:opacity-30"
+					class="hidden h-8 w-8 items-center justify-center border border-white/10 hover:border-[var(--accent)] disabled:opacity-30 sm:flex"
 					title="Aumentar Zoom (+)"
 				>
 					<ZoomIn class="h-3.5 w-3.5" />
 				</button>
 
-				<div class="mx-1 h-4 w-px bg-white/20"></div>
+				<div class="mx-1 hidden h-4 w-px bg-white/20 sm:block"></div>
 
 				<button
 					type="button"
@@ -663,7 +731,9 @@
 		<div
 			class={cn(
 				'h-full w-full overflow-hidden transition-all duration-300',
-				sidebarOpen ? 'mr-80' : ''
+				// So empurra onde ha largura de sobra: no telefone o painel e
+				// overlay com backdrop, e a margem deixava a leitura em ~40px.
+				sidebarOpen ? 'xl:mr-80' : ''
 			)}
 			ontouchstart={handleTouchStart}
 			ontouchmove={handleTouchMove}
@@ -685,10 +755,21 @@
 			{#if readingMode === 'vertical'}
 				<div
 					bind:this={verticalContainer}
-					class="h-full w-full overflow-x-hidden overflow-y-auto bg-black"
+					class="h-full w-full overflow-x-auto overflow-y-auto bg-black"
 					onscroll={handleVerticalScroll}
 				>
-					<div class="mx-auto flex w-full flex-col items-center pb-24 md:max-w-[760px]">
+					<!--
+						Com zoom o `width: N%` das paginas passa da tela; `items-center`
+						centraliza o excesso e o navegador nao deixa rolar para a
+						esquerda, cortando metade da pagina sem volta. Alinhar ao inicio
+						deixa o pan horizontal alcancar as duas bordas.
+					-->
+					<div
+						class={cn(
+							'mx-auto flex w-full flex-col pb-24 md:max-w-[760px]',
+							zoomLevel > 1 ? 'items-start' : 'items-center'
+						)}
+					>
 						{#each pageUrls as url, i (i)}
 							{#if url}
 								<img
@@ -738,13 +819,34 @@
 				</div>
 			{:else}
 				<div class="flex h-full w-full items-center justify-center p-4">
-					<div class="relative flex h-full w-full items-center justify-center overflow-auto">
-						<img
-							src={pageUrls[currentPage - 1]}
-							alt={`Página ${currentPage}`}
-							class="max-h-full max-w-full object-contain transition-transform"
-							style="transform: scale({zoomLevel});"
-						/>
+					<!--
+						Com zoom, a pagina precisa poder ser arrastada. `transform:
+						scale` nao cria area rolavel — o que passava da borda ficava
+						inalcancavel. Largura em % gera overflow de verdade, e o
+						`justify-center` so vale enquanto cabe (senao corta a
+						esquerda no scroll).
+					-->
+					<div
+						class={cn(
+							'relative flex h-full w-full overflow-auto',
+							zoomLevel > 1 ? 'items-start justify-start' : 'items-center justify-center'
+						)}
+					>
+						{#if pageUrls[currentPage - 1]}
+							<img
+								src={pageUrls[currentPage - 1]}
+								alt={`Página ${currentPage}`}
+								class="m-auto h-auto max-w-none object-contain"
+								style="width: {zoomLevel * 100}%; max-height: {zoomLevel === 1 ? '100%' : 'none'};"
+							/>
+						{:else}
+							<!-- Parcial: sem isto o `src=""` virava icone de imagem quebrada. -->
+							<div
+								class="m-auto flex aspect-[2/3] max-h-full w-full max-w-md items-center justify-center border border-white/10 font-mono text-xs text-white/40"
+							>
+								Página {currentPage} indisponível
+							</div>
+						{/if}
 					</div>
 				</div>
 			{/if}
@@ -754,21 +856,21 @@
 		{#if readingMode !== 'vertical'}
 			<footer
 				class={cn(
-					'absolute right-0 bottom-0 left-0 z-50 flex items-center justify-between border-t border-white/10 bg-black/90 p-4 px-6 text-white backdrop-blur-md transition-all duration-300',
+					'absolute right-0 bottom-0 left-0 z-50 flex items-center justify-between border-t border-white/10 bg-black/90 p-4 px-6 pb-[calc(1rem+env(safe-area-inset-bottom))] text-white backdrop-blur-md transition-all duration-300',
 					isControlsVisible ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0',
-					sidebarOpen ? 'mr-80' : ''
+					// So empurra onde ha largura de sobra: no telefone o painel e
+					// overlay com backdrop, e a margem deixava a leitura em ~40px.
+					sidebarOpen ? 'xl:mr-80' : ''
 				)}
 			>
 				<button
 					type="button"
-					class="flex h-10 w-10 items-center justify-center border border-white/20 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-20"
+					class="flex h-11 w-11 items-center justify-center border border-white/20 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-20"
 					onclick={(e) => {
 						e.stopPropagation();
 						pageLeft();
 					}}
-					disabled={readingMode === 'rtl'
-						? currentPage >= pageUrls.length && !nextChapter
-						: currentPage <= 1 && !prevChapter}
+					disabled={isTurnBlocked('left')}
 				>
 					<ChevronLeft class="h-5 w-5" />
 				</button>
@@ -788,14 +890,12 @@
 
 				<button
 					type="button"
-					class="flex h-10 w-10 items-center justify-center border border-white/20 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-20"
+					class="flex h-11 w-11 items-center justify-center border border-white/20 transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)] disabled:opacity-20"
 					onclick={(e) => {
 						e.stopPropagation();
 						pageRight();
 					}}
-					disabled={readingMode === 'rtl'
-						? currentPage <= 1 && !prevChapter
-						: currentPage >= pageUrls.length && !nextChapter}
+					disabled={isTurnBlocked('right')}
 				>
 					<ChevronRight class="h-5 w-5" />
 				</button>
@@ -813,7 +913,7 @@
 		{/if}
 		<aside
 			class={cn(
-				'absolute top-0 right-0 bottom-0 z-50 flex w-80 flex-col border-l border-[var(--rule)] bg-[var(--bg-secondary)] text-[var(--text-primary)] shadow-2xl transition-transform duration-300',
+				'absolute top-0 right-0 bottom-0 z-50 flex w-80 max-w-[85vw] flex-col border-l border-[var(--rule)] bg-[var(--bg-secondary)] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-[var(--text-primary)] shadow-2xl transition-transform duration-300',
 				sidebarOpen ? 'translate-x-0' : 'translate-x-full'
 			)}
 		>
@@ -846,8 +946,9 @@
 				</div>
 				<button
 					type="button"
-					class="p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+					class="flex h-11 w-11 items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)]"
 					onclick={() => (sidebarOpen = false)}
+					aria-label="Fechar painel"
 				>
 					<X class="h-4 w-4" />
 				</button>
@@ -855,6 +956,32 @@
 
 			<div class="flex-1 overflow-y-auto p-4">
 				{#if sidebarTab === 'settings'}
+					<!-- Unico acesso ao zoom no telefone, onde o header nao cabe. -->
+					<span class="kicker mb-3 block text-[0.625rem] sm:hidden">Zoom</span>
+					<div class="mb-6 flex items-center gap-2 sm:hidden">
+						<button
+							type="button"
+							onclick={zoomOut}
+							disabled={zoomLevel <= MIN_ZOOM}
+							class="flex h-11 flex-1 items-center justify-center border border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--accent)] disabled:opacity-30"
+							aria-label="Diminuir zoom"
+						>
+							<ZoomOut class="h-4 w-4" />
+						</button>
+						<span class="w-14 text-center font-mono text-xs font-bold">
+							{Math.round(zoomLevel * 100)}%
+						</span>
+						<button
+							type="button"
+							onclick={zoomIn}
+							disabled={zoomLevel >= MAX_ZOOM}
+							class="flex h-11 flex-1 items-center justify-center border border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--accent)] disabled:opacity-30"
+							aria-label="Aumentar zoom"
+						>
+							<ZoomIn class="h-4 w-4" />
+						</button>
+					</div>
+
 					<span class="kicker mb-3 block text-[0.625rem]">Modo de Leitura</span>
 					<div class="flex flex-col gap-2">
 						{#each READING_MODES as mode (mode.value)}

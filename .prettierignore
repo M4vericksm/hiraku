@@ -7,3 +7,22 @@ bun.lockb
 
 # Miscellaneous
 /static/
+
+# Saida de build — o Vite gera, ninguem edita a mao.
+/build/
+/.svelte-kit/
+
+# Android: gradle e o `cap sync` cospem milhares de arquivos gerados aqui,
+# inclusive uma copia inteira do bundle web em app/src/main/assets/public.
+/android/build/
+/android/.gradle/
+/android/.idea/
+/android/app/build/
+/android/app/src/main/assets/public/
+/android/capacitor-cordova-android-plugins/
+
+# Config local da ferramenta, reescrita automaticamente.
+/.claude/settings.local.json
+
+# Logs de dev.
+*.log

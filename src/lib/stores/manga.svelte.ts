@@ -234,6 +234,49 @@ class MangaStore {
 		this.saveToStorage();
 	}
 
+	/** Desfaz o "lido". Idempotente: desmarcar o que nao estava lido nao faz nada. */
+	markChapterUnread(id: string, source: string, chapterId: string) {
+		const index = this.indexOf(id, source);
+		if (index === -1) return;
+
+		const manga = this.library[index];
+		const read = manga.readChapterIds ?? [];
+		if (!read.includes(chapterId)) return;
+
+		this.library[index] = { ...manga, readChapterIds: read.filter((c) => c !== chapterId) };
+		this.saveToStorage();
+	}
+
+	/**
+	 * Marca ou desmarca varios capitulos de uma vez.
+	 *
+	 * Existe separado do `markChapterRead` em laco porque cada chamada daquele
+	 * grava no localStorage: marcar 200 capitulos selecionados renderia 200
+	 * serializacoes da biblioteca inteira. Aqui a escrita e uma so.
+	 */
+	setChaptersRead(id: string, source: string, chapterIds: string[], read: boolean) {
+		const index = this.indexOf(id, source);
+		if (index === -1 || chapterIds.length === 0) return;
+
+		const manga = this.library[index];
+		const current = manga.readChapterIds ?? [];
+
+		// Sets so de leitura: servem de indice para nao cair em `includes` dentro
+		// de laco. Nao viram SvelteSet porque nao sao estado — morrem aqui.
+		const alreadyRead = new Set(current);
+		const affected = new Set(chapterIds);
+
+		const next = read
+			? [...current, ...[...affected].filter((c) => !alreadyRead.has(c))]
+			: current.filter((c) => !affected.has(c));
+
+		// Nada mudou (ex.: remarcar o que ja estava lido): nao suja o storage.
+		if (next.length === current.length) return;
+
+		this.library[index] = { ...manga, readChapterIds: next };
+		this.saveToStorage();
+	}
+
 	isChapterRead(id: string, source: string, chapterId: string): boolean {
 		return this.find(id, source)?.readChapterIds?.includes(chapterId) ?? false;
 	}

@@ -36,6 +36,15 @@ interface StoredChapter {
 	id: string;
 	/** Esparso enquanto parcial: indices sem pagina ficam vazios. */
 	pageBlobs: (Blob | undefined)[];
+	/**
+	 * URL de origem de cada pagina, na mesma ordem dos blobs.
+	 *
+	 * Guardado para retomar por URL e nao por posicao: quando a fonte insere
+	 * uma pagina no meio (creditos, aviso da scan), o indice de tudo que vem
+	 * depois anda um, e casar por posicao coleria a pagina errada. Ausente
+	 * nos registros gravados antes desta versao.
+	 */
+	pageUrls?: string[];
 }
 
 interface StoredChapterList {
@@ -48,21 +57,59 @@ function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Erro de disco cheio, com mensagem que o usuario entende.
+ *
+ * O IndexedDB sinaliza falta de espaco abortando a transacao com um
+ * `QuotaExceededError`; sem este envelope a UI cai no "tente novamente"
+ * generico e o usuario tenta para sempre, porque tentar de novo nao
+ * resolve — so apagar algo resolve.
+ */
+export class StorageFullError extends Error {
+	constructor() {
+		super('Sem espaço no dispositivo. Apague capítulos baixados e tente de novo.');
+		this.name = 'StorageFullError';
+	}
+}
+
+function isQuotaError(error: unknown): boolean {
+	return error instanceof DOMException && error.name === 'QuotaExceededError';
+}
+
 class OfflineService {
 	private dbName = 'hiraku-offline';
 	private dbVersion = 2;
 	private db: IDBDatabase | null = null;
+	/**
+	 * Abertura em voo. Sem isto, a lista de capitulos disparava um
+	 * `getChapterStatus` por linha ao montar a pagina e cada um abria sua
+	 * propria conexao — dezenas de `indexedDB.open` simultaneos vazando.
+	 */
+	private opening: Promise<IDBDatabase> | null = null;
 
 	private initDB(): Promise<IDBDatabase> {
 		if (this.db) return Promise.resolve(this.db);
-		return new Promise((resolve, reject) => {
+		if (this.opening) return this.opening;
+
+		this.opening = new Promise<IDBDatabase>((resolve, reject) => {
 			const request = indexedDB.open(this.dbName, this.dbVersion);
 
 			request.onerror = () => reject(request.error);
 			request.onsuccess = () => {
-				this.db = request.result;
-				resolve(request.result);
+				const db = request.result;
+				// Outra aba pedindo upgrade: solta a conexao para nao trava-la.
+				db.onversionchange = () => {
+					db.close();
+					this.db = null;
+				};
+				this.db = db;
+				resolve(db);
 			};
+
+			// Outra aba antiga segura a versao anterior: sem isto o await
+			// pendurava para sempre e a tela ficava em "carregando".
+			request.onblocked = () =>
+				reject(new Error('Feche as outras abas do Hiraku para atualizar o armazenamento.'));
 
 			request.onupgradeneeded = () => {
 				const db = request.result;
@@ -78,6 +125,14 @@ class OfflineService {
 				}
 			};
 		});
+
+		// Uma falha nao pode deixar a promise rejeitada em cache: a proxima
+		// chamada precisa poder tentar de novo.
+		this.opening.catch(() => {
+			this.opening = null;
+		});
+
+		return this.opening;
 	}
 
 	private get<T>(store: string, key: string): Promise<T | undefined> {
@@ -124,8 +179,22 @@ class OfflineService {
 		// Retoma de onde parou: o que ja esta salvo nao baixa de novo.
 		const existing = await this.get<StoredChapter>('chapters', key);
 		const pageBlobs: (Blob | undefined)[] = new Array(urls.length);
-		if (existing?.pageBlobs?.length === urls.length) {
-			for (let i = 0; i < urls.length; i++) pageBlobs[i] = existing.pageBlobs[i];
+
+		if (existing?.pageBlobs?.length) {
+			if (existing.pageUrls?.length === existing.pageBlobs.length) {
+				// Caminho novo: casa por URL, entao a fonte pode ter inserido ou
+				// removido paginas que o resto continua aproveitavel.
+				const savedByUrl = new Map<string, Blob>();
+				for (let i = 0; i < existing.pageUrls.length; i++) {
+					const blob = existing.pageBlobs[i];
+					if (blob) savedByUrl.set(existing.pageUrls[i], blob);
+				}
+				for (let i = 0; i < urls.length; i++) pageBlobs[i] = savedByUrl.get(urls[i]);
+			} else if (existing.pageBlobs.length === urls.length) {
+				// Registro antigo, sem URLs: so da para casar por posicao, e so
+				// vale se a contagem bater.
+				for (let i = 0; i < urls.length; i++) pageBlobs[i] = existing.pageBlobs[i];
+			}
 		}
 
 		let completed = pageBlobs.filter(Boolean).length;
@@ -180,12 +249,19 @@ class OfflineService {
 		await new Promise<void>((resolve, reject) => {
 			const transaction = db.transaction(['chapters', 'metadata'], 'readwrite');
 
-			transaction.onerror = () => reject(transaction.error);
-			transaction.onabort = () =>
-				reject(transaction.error ?? new Error('Sem espaço para salvar o capítulo.'));
+			const fail = () => {
+				const error = transaction.error;
+				reject(
+					isQuotaError(error)
+						? new StorageFullError()
+						: (error ?? new Error('Não foi possível salvar o capítulo.'))
+				);
+			};
+			transaction.onerror = fail;
+			transaction.onabort = fail;
 			transaction.oncomplete = () => resolve();
 
-			const stored: StoredChapter = { id: key, pageBlobs };
+			const stored: StoredChapter = { id: key, pageBlobs, pageUrls: urls };
 			transaction.objectStore('chapters').put(stored);
 
 			const chapterMeta: OfflineChapterMeta = {
@@ -286,7 +362,10 @@ class OfflineService {
 		if (!blobs?.length || !blobs.some(Boolean)) {
 			throw new Error('Capítulo offline não encontrado.');
 		}
-		return blobs.map((blob) => (blob ? URL.createObjectURL(blob) : ''));
+		// `Array.from` e nao `map`: o array de blobs e esparso (as paginas que
+		// faltam nunca foram atribuidas) e `map` preserva buracos sem chamar o
+		// callback — o leitor recebia `undefined` onde espera a string vazia.
+		return Array.from(blobs, (blob) => (blob ? URL.createObjectURL(blob) : ''));
 	}
 
 	revokePages(urls: string[]): void {
@@ -301,6 +380,9 @@ class OfflineService {
 		return new Promise((resolve, reject) => {
 			const transaction = db.transaction(['chapters', 'metadata'], 'readwrite');
 			transaction.onerror = () => reject(transaction.error);
+			// Sem `onabort` um aborto silencioso pendurava o await para sempre.
+			transaction.onabort = () =>
+				reject(transaction.error ?? new Error('Não foi possível apagar o capítulo.'));
 			transaction.oncomplete = () => resolve();
 
 			transaction.objectStore('chapters').delete(key);
@@ -318,12 +400,32 @@ class OfflineService {
 		});
 	}
 
+	/**
+	 * Espaco usado e disponivel, quando o navegador informa.
+	 *
+	 * `usage`/`quota` do navegador cobrem toda a origem, nao so o Hiraku, e o
+	 * Android costuma reportar uma cota bem maior que o disco livre real —
+	 * serve para orientar, nao para prometer.
+	 */
+	async estimateStorage(): Promise<{ usage: number; quota: number } | undefined> {
+		if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return undefined;
+		try {
+			const { usage, quota } = await navigator.storage.estimate();
+			if (usage === undefined || quota === undefined) return undefined;
+			return { usage, quota };
+		} catch {
+			return undefined;
+		}
+	}
+
 	/** Apaga todos os capitulos baixados e as listas em cache. */
 	async clearAll(): Promise<void> {
 		const db = await this.initDB();
 		return new Promise((resolve, reject) => {
 			const transaction = db.transaction(['chapters', 'metadata', 'chapterLists'], 'readwrite');
 			transaction.onerror = () => reject(transaction.error);
+			transaction.onabort = () =>
+				reject(transaction.error ?? new Error('Não foi possível limpar os downloads.'));
 			transaction.oncomplete = () => resolve();
 
 			transaction.objectStore('chapters').clear();

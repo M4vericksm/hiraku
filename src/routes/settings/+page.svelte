@@ -2,6 +2,8 @@
 	import { mangaStore, type Manga } from '$lib/stores/manga.svelte';
 	import { preferences, type ReadingMode } from '$lib/stores/preferences.svelte';
 	import { cn } from '$lib/utils';
+	import { resolve } from '$app/paths';
+	import { offlineService } from '$lib/services/offline';
 
 	const themes: { id: string; name: string; kanji: string; desc: string }[] = [
 		{
@@ -26,10 +28,16 @@
 
 	const readingModes: { id: ReadingMode; name: string; kanji: string; desc: string }[] = [
 		{
+			id: 'ltr',
+			name: 'Leitura Ocidental (LTR)',
+			kanji: '左開',
+			desc: 'Esquerda para a direita. Seta → avança a página.'
+		},
+		{
 			id: 'rtl',
 			name: 'Leitura Oriental (RTL)',
 			kanji: '右開',
-			desc: 'Direita para a esquerda, tradicional de mangás japoneses.'
+			desc: 'Direita para a esquerda, tradicional de mangás japoneses. Seta → volta a página.'
 		},
 		{
 			id: 'vertical',
@@ -49,13 +57,22 @@
 	);
 
 	let clearConfirm = $state(false);
+	let isClearing = $state(false);
 
-	function handleClearAll() {
+	async function handleClearAll() {
 		if (!clearConfirm) {
 			clearConfirm = true;
 			return;
 		}
-		// Limpeza de histórico e cache local
+		isClearing = true;
+		// Os capitulos baixados vivem no IndexedDB, nao no localStorage: sem esta
+		// chamada os blobs ficavam orfaos ocupando o disco, e a biblioteca que os
+		// referenciava tinha acabado de sumir — nao havia mais como apaga-los.
+		try {
+			await offlineService.clearAll();
+		} catch (err) {
+			console.error('Falha ao limpar os downloads', err);
+		}
 		mangaStore.clearAll();
 		localStorage.clear();
 		window.location.reload();
@@ -242,24 +259,52 @@
 		>
 			<div>
 				<h3 class="font-mono text-xs font-bold text-[var(--text-primary)] uppercase">
+					Capítulos Baixados
+				</h3>
+				<p class="font-mono text-[0.6875rem] text-[var(--text-muted)]">
+					Veja quanto espaço cada obra ocupa e apague capítulo por capítulo.
+				</p>
+			</div>
+
+			<a
+				href={resolve('/downloads')}
+				class="btn-tactile inline-flex min-h-11 shrink-0 items-center justify-center border border-[var(--rule)] bg-[var(--bg-primary)] px-4 py-2 font-mono text-xs font-bold tracking-wider text-[var(--text-primary)] uppercase transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+			>
+				Gerenciar Downloads
+			</a>
+		</div>
+
+		<div
+			class="flex flex-col gap-4 border border-[var(--rule)] bg-[var(--bg-secondary)] p-4 sm:flex-row sm:items-center sm:justify-between"
+		>
+			<div>
+				<h3 class="font-mono text-xs font-bold text-[var(--text-primary)] uppercase">
 					Limpar Todos os Dados e Biblioteca
 				</h3>
 				<p class="font-mono text-[0.6875rem] text-[var(--text-muted)]">
-					Remove todo o progresso de leitura, coleções criadas e preferências salvas no navegador.
+					Remove todo o progresso de leitura, coleções criadas, preferências salvas e os capítulos
+					baixados.
 				</p>
 			</div>
 
 			<button
 				type="button"
 				onclick={handleClearAll}
+				disabled={isClearing}
 				class={cn(
-					'btn-tactile border px-4 py-2 font-mono text-xs font-bold tracking-wider uppercase transition-colors',
+					'btn-tactile min-h-11 shrink-0 border px-4 py-2 font-mono text-xs font-bold tracking-wider uppercase transition-colors disabled:opacity-50',
 					clearConfirm
 						? 'animate-pulse border-red-600 bg-red-600 text-white'
 						: 'border-[var(--rule)] bg-[var(--bg-primary)] text-[var(--text-primary)] hover:border-red-500'
 				)}
 			>
-				{clearConfirm ? 'Confirmar Exclusão Definitiva' : 'Limpar Dados'}
+				{#if isClearing}
+					Limpando…
+				{:else if clearConfirm}
+					Confirmar Exclusão Definitiva
+				{:else}
+					Limpar Dados
+				{/if}
 			</button>
 		</div>
 	</section>
