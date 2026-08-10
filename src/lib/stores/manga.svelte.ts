@@ -85,6 +85,16 @@ class MangaStore {
 		if (index === -1) return;
 
 		const manga = this.library[index];
+		// Chamada repetida com a mesma posicao nao deve trocar o objeto no array:
+		// cada troca recomputa os deriveds que apontam para ele.
+		if (
+			manga.lastReadPage === page &&
+			manga.totalPage === total &&
+			(chapter?.id === undefined || manga.lastChapterId === chapter.id) &&
+			(chapter?.label === undefined || manga.lastChapterLabel === chapter.label)
+		) {
+			return;
+		}
 		this.library[index] = {
 			...manga,
 			lastReadPage: page,
@@ -121,10 +131,19 @@ class MangaStore {
 
 	updateMeta(id: string, source: string, meta: Partial<Manga>) {
 		const idx = this.indexOf(id, source);
-		if (idx !== -1) {
-			this.library[idx] = { ...this.library[idx], ...meta };
-			this.saveToStorage();
-		}
+		if (idx === -1) return;
+
+		// Escrever sem mudanca real troca o objeto no array e reroda qualquer
+		// effect que dependa dele — com um effect que chama updateMeta, isso
+		// vira loop infinito. No-op quando os valores ja sao os atuais.
+		const current = this.library[idx];
+		const changed = (Object.keys(meta) as (keyof Manga)[]).some(
+			(key) => current[key] !== meta[key]
+		);
+		if (!changed) return;
+
+		this.library[idx] = { ...this.library[idx], ...meta };
+		this.saveToStorage();
 	}
 
 	clearAll() {

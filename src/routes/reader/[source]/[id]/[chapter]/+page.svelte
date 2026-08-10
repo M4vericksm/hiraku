@@ -23,7 +23,7 @@
 		WifiOff,
 		List
 	} from 'lucide-svelte';
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { cn } from '$lib/utils';
 
 	const source = $derived(page.params.source ?? '');
@@ -129,7 +129,9 @@
 		const currentChapterId = chapterId;
 		if (!currentSource || !mangaId || !currentChapterId) return;
 
-		loadChapter(currentSource, mangaId, currentChapterId);
+		// untrack: loadChapter le e escreve pageUrls/isOfflineSource; sem isso
+		// essas leituras viram dependencias do effect e cada carga dispara outra.
+		untrack(() => loadChapter(currentSource, mangaId, currentChapterId));
 	});
 
 	// Lista de capitulos é independente das paginas: carrega uma vez por mangá.
@@ -144,8 +146,11 @@
 	});
 
 	// Mantem o rotulo do capitulo na biblioteca assim que ele é conhecido.
+	// So escreve quando o rotulo realmente mudou: updateMeta troca o objeto no
+	// array, o que recomputa `manga` — escrever sempre criava um loop infinito
+	// de effect (spinner eterno em qualquer titulo da estante).
 	$effect(() => {
-		if (chapterLabel && manga) {
+		if (chapterLabel && manga && manga.lastChapterLabel !== chapterLabel) {
 			mangaStore.updateMeta(id, source, { lastChapterLabel: chapterLabel });
 		}
 	});
