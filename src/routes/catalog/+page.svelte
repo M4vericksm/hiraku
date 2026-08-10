@@ -6,8 +6,9 @@
 	import { ApiError, BackendApiService, isAborted } from '$lib/services/api';
 	import { onDestroy } from 'svelte';
 
-	// Obras Principais Canônicas para Exibição Inicial no Catálogo com IDs reais
+	// Obras Principais Canônicas para Exibição Inicial no Catálogo com IDs reais e representativas das principais fontes
 	const featuredMangas: Manga[] = [
+		// --- MANGADEX (Top Global & PT-BR com IDs UUID canônicos) ---
 		{
 			id: '801513ba-a712-498c-8f57-cae55b38cc92',
 			source: 'mangadex',
@@ -16,7 +17,7 @@
 			coverUrl:
 				'https://uploads.mangadex.org/covers/801513ba-a712-498c-8f57-cae55b38cc92/81e1c82d-6672-400c-8c58-4ff9bfb89031.jpg.256.jpg',
 			description:
-				'Guts, um ex-mercenário agora conhecido como o Espadachim Negro, busca vingança contra as forças demoníacas.',
+				'Guts, um ex-mercenário agora conhecido como o Espadachim Negro, busca vingança contra a Mão de Deus e os Apóstolos.',
 			progress: 0,
 			lastReadPage: 0,
 			totalPage: 0,
@@ -31,7 +32,7 @@
 			coverUrl:
 				'https://uploads.mangadex.org/covers/a1c7c817-4e59-43b7-9365-09675a149a6f/2f4aca53-64c7-46ac-ae85-3bc9b3169890.png.256.jpg',
 			description:
-				'Monkey D. Luffy se recusa a deixar qualquer um ficar em seu caminho para se tornar o Rei dos Piratas.',
+				'Monkey D. Luffy navega pelos mares com sua tripulação em busca do lendário tesouro One Piece para se tornar o Rei dos Piratas.',
 			progress: 0,
 			lastReadPage: 0,
 			totalPage: 0,
@@ -46,7 +47,7 @@
 			coverUrl:
 				'https://uploads.mangadex.org/covers/a77742b1-befd-49a4-bff5-1ad4e6b0ef7b/6e518bd1-5f60-446b-8832-bfe6bf74834b.jpg.256.jpg',
 			description:
-				'Denji tinha um sonho simples: viver uma vida feliz e pacífica com sua parceira Pochita.',
+				'Denji se funde ao demônio da motosserra Pochita e se junta à Segurança Pública como caçador de demônios.',
 			progress: 0,
 			lastReadPage: 0,
 			totalPage: 0,
@@ -61,7 +62,7 @@
 			coverUrl:
 				'https://uploads.mangadex.org/covers/d1a9fdeb-f713-407f-960c-8326b586e6fd/05f8dcb4-8ea1-48db-a0b1-3a8fbf695e5a.jpg.256.jpg',
 			description:
-				'No Japão do século XVI, Shinmen Takezou é um jovem selvagem e agressivo que se tornará o lendário Miyamoto Musashi.',
+				'A jornada existencial e brutal de Shinmen Takezou para se tornar o lendário mestre espadachim Miyamoto Musashi.',
 			progress: 0,
 			lastReadPage: 0,
 			totalPage: 0,
@@ -76,7 +77,7 @@
 			coverUrl:
 				'https://uploads.mangadex.org/covers/5d1fc77e-706a-4fc5-bea8-486c9be0145d/7fa60f5d-285a-40c5-8a1d-9cf375eaf897.jpg.256.jpg',
 			description:
-				'Thorfinn, filho de um dos maiores guerreiros vikings, cresce entre mercenários jurando vingança.',
+				'Thorfinn, filho de um lendário guerreiro viking, busca vingança contra o assassino de seu pai em uma Europa em guerra.',
 			progress: 0,
 			lastReadPage: 0,
 			totalPage: 0,
@@ -91,7 +92,7 @@
 			coverUrl:
 				'https://uploads.mangadex.org/covers/4301d363-ee02-43f4-ae24-4cbf29a74830/0295431e-ccb9-4599-900f-0a1bc7380561.jpg.256.jpg',
 			description:
-				'Punpun Onodera é um garoto comum vivendo no Japão com sua visão do mundo em constante transformação.',
+				'O crescimento realista, melancólico e complexo de Punpun Onodera ao longo de sua infância, adolescência e vida adulta.',
 			progress: 0,
 			lastReadPage: 0,
 			totalPage: 0,
@@ -99,36 +100,156 @@
 			genres: ['seinen', 'psychological', 'slice-of-life', 'drama']
 		},
 		{
-			id: '6b1eb93e-473a-4ab3-9922-1a66d2a29a4a',
+			id: 'c52b2ce3-7f95-469c-96b0-474fb7624218',
 			source: 'mangadex',
-			title: 'Naruto',
-			author: 'Masashi Kishimoto',
+			title: 'Jujutsu Kaisen',
+			author: 'Gege Akutami',
 			coverUrl:
-				'https://uploads.mangadex.org/covers/6b1eb93e-473a-4ab3-9922-1a66d2a29a4a/c5a3090c-4ca0-40a2-9102-e0ee0c6dac15.jpg.256.jpg',
+				'https://uploads.mangadex.org/covers/c52b2ce3-7f95-469c-96b0-474fb7624218/1e93893d-4c3e-4869-9032-6bf59942a7fa.jpg.256.jpg',
 			description:
-				'Naruto Uzumaki é um jovem ninja hiperativo que busca reconhecimento e sonha em se tornar Hokage.',
+				'Yuji Itadori engole um dedo amaldiçoado e passa a combater maldições ancestrais na Escola Técnica de Feitiçaria de Tóquio.',
 			progress: 0,
 			lastReadPage: 0,
 			totalPage: 0,
 			addedAt: new Date().toISOString(),
-			genres: ['shonen', 'action', 'adventure', 'fantasy', 'martial-arts']
+			genres: ['shonen', 'action', 'supernatural', 'demons']
 		},
+		{
+			id: 'e78a489b-6632-4d61-b069-52341857f290',
+			source: 'mangadex',
+			title: 'Frieren: Beyond Journey\x27s End',
+			author: 'Kanehito Yamada, Tsukasa Abe',
+			coverUrl:
+				'https://uploads.mangadex.org/covers/e78a489b-6632-4d61-b069-52341857f290/a6e9a6e1-bf00-4b35-8664-888913ae6d22.jpg.256.jpg',
+			description:
+				'A maga elfa Frieren trilha os caminhos do passado após a morte do herói Himmel, descobrindo o valor dos laços humanos.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['shonen', 'fantasy', 'adventure', 'drama', 'slice-of-life']
+		},
+
+		// --- MANGALIVRE & MADARA SCANS PT-BR (Top Clássicos e Webtoons mais lidos) ---
 		{
 			id: 'solo-leveling',
 			source: 'mangalivre',
 			title: 'Solo Leveling',
 			author: 'Chugong',
-			// Sem host: `VolumeCard`/detalhe resolvem na hora de exibir, e o mesmo
-			// valor pode ir para a estante sem congelar o backend de hoje.
 			coverUrl:
 				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FSolo-Leveling-193x278.webp',
 			description:
-				'Conhecido como o caçador mais fraco de toda a humanidade, Sung Jin-Woo luta pela sobrevivência em masmorras mortais.',
+				'Sung Jin-Woo, o caçador mais fraco do mundo, recebe a oportunidade única de evoluir infinitamente ao despertar um Sistema misterioso.',
 			progress: 0,
 			lastReadPage: 0,
 			totalPage: 0,
 			addedAt: new Date().toISOString(),
 			genres: ['action', 'adventure', 'fantasy']
+		},
+		{
+			id: 'bleach',
+			source: 'mangalivre',
+			title: 'Bleach',
+			author: 'Tite Kubo',
+			coverUrl:
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FBleach-193x278.webp',
+			description:
+				'Ichigo Kurosaki recebe os poderes de Ceifeiro de Almas da Shinigami Rukia Kuchiki para salvar sua família e proteger a Sociedade das Almas.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['shonen', 'action', 'supernatural']
+		},
+		{
+			id: 'hunter-x-hunter',
+			source: 'mangalivre',
+			title: 'Hunter x Hunter',
+			author: 'Yoshihiro Togashi',
+			coverUrl:
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FHunter-x-Hunter-193x278.webp',
+			description:
+				'Gon Freecss almeja se tornar um Hunter de elite para desvendar os mistérios do mundo e reencontrar seu pai Ging.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['shonen', 'action', 'adventure', 'fantasy']
+		},
+		{
+			id: 'fullmetal-alchemist',
+			source: 'mangalivre',
+			title: 'Fullmetal Alchemist',
+			author: 'Hiromu Arakawa',
+			coverUrl:
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FFullmetal-Alchemist-193x278.webp',
+			description:
+				'Edward e Alphonse Elric buscam a lendária Pedra Filosofal para recuperar seus corpos após uma transmutação humana proibida.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['shonen', 'action', 'adventure', 'fantasy', 'drama']
+		},
+		{
+			id: 'the-beginning-after-the-end',
+			source: 'mangalivre',
+			title: 'The Beginning After The End',
+			author: 'TurtleMe',
+			coverUrl:
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FThe-Beginning-After-The-End-193x278.webp',
+			description:
+				'O Rei Grey renasce como Arthur Leywin em Dicathen, um mundo repleto de magia onde deverá proteger aqueles que ama de perigos iminentes.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['action', 'adventure', 'fantasy', 'isekai']
+		},
+		{
+			id: 'tower-of-god',
+			source: 'mangalivre',
+			title: 'Tower of God',
+			author: 'SIU',
+			coverUrl:
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FTower-of-God-193x278.webp',
+			description:
+				'Vigésimo Quinto Bam entra na imensa Torre de Deus para reencontrar Rachel, enfrentando testes desafiadores em cada andar.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['action', 'adventure', 'fantasy', 'mystery']
+		},
+		{
+			id: 'omniscient-readers-viewpoint',
+			source: 'mangalivre',
+			title: 'Omniscient Reader\x27s Viewpoint',
+			author: 'Sing Shong',
+			coverUrl:
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FOmniscient-Readers-Viewpoint-193x278.webp',
+			description:
+				'Kim Dokja era o único leitor de uma webnovel desconhecida. Quando o enredo vira realidade apocalíptica, ele é o único que sabe o final.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['action', 'fantasy', 'supernatural', 'adventure']
+		},
+		{
+			id: 'nano-machine',
+			source: 'mangalivre',
+			title: 'Nano Machine',
+			author: 'Han-joong-wueol-ya',
+			coverUrl:
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FNano-Machine-193x278.webp',
+			description:
+				'Cheon Yeo-Woon recebe do seu descendente do futuro uma injeção de nanomáquinas que transforma seu corpo no Culto Demoníaco.',
+			progress: 0,
+			lastReadPage: 0,
+			totalPage: 0,
+			addedAt: new Date().toISOString(),
+			genres: ['action', 'martial-arts', 'fantasy', 'sci-fi']
 		}
 	];
 

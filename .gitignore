@@ -30,3 +30,7 @@ vite.config.ts.timestamp-*
 
 # Banco local gerado ao rodar o backend
 hiraku.db
+
+*.log
+.backend.log
+.frontend.log

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { preferences, SCROLL_SPEEDS } from './preferences.svelte';
+import { pageDirection, preferences, SCROLL_SPEEDS } from './preferences.svelte';
 
 const STORAGE_KEY = 'hiraku-preferences';
 
@@ -10,7 +10,7 @@ function stored(): Record<string, unknown> {
 beforeEach(() => {
 	localStorage.clear();
 	preferences.setTheme('theme-ink');
-	preferences.setReadingMode('rtl');
+	preferences.setReadingMode('ltr');
 	preferences.setAutoScrollSpeedLevel(3);
 });
 
@@ -28,6 +28,34 @@ describe('PreferencesStore persistence', () => {
 	it('persists the reading mode, which used to reset every chapter', () => {
 		preferences.setReadingMode('vertical');
 		expect(stored().readingMode).toBe('vertical');
+	});
+
+	it('aceita ltr vindo do storage — o modo novo nao pode cair no default', () => {
+		preferences.setReadingMode('ltr');
+		expect(stored().readingMode).toBe('ltr');
+	});
+});
+
+describe('pageDirection', () => {
+	it('no modo ocidental a seta direita avanca', () => {
+		expect(pageDirection('ltr', 'right')).toBe('next');
+		expect(pageDirection('ltr', 'left')).toBe('prev');
+	});
+
+	it('no modo mangá o sentido inverte — a proxima pagina fica a esquerda', () => {
+		expect(pageDirection('rtl', 'left')).toBe('next');
+		expect(pageDirection('rtl', 'right')).toBe('prev');
+	});
+
+	it('no scroll continuo as setas nao viram pagina', () => {
+		expect(pageDirection('vertical', 'left')).toBe('none');
+		expect(pageDirection('vertical', 'right')).toBe('none');
+	});
+
+	it('cada lado faz uma coisa diferente — nunca os dois o mesmo', () => {
+		for (const mode of ['ltr', 'rtl'] as const) {
+			expect(pageDirection(mode, 'left')).not.toBe(pageDirection(mode, 'right'));
+		}
 	});
 });
 
