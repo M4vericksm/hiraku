@@ -115,6 +115,48 @@ describe('MangaStore.updateProgress', () => {
 		mangaStore.updateProgress('empty', 'src', 0, 0);
 		expect(mangaStore.find('empty', 'src')?.progress).toBe(0);
 	});
+
+	// Regressao do loop infinito do leitor: trocar o objeto no array sem mudanca
+	// real recomputava `manga` e rerodava o effect que chamava o update de novo.
+	it('is a no-op when called again with the same position', () => {
+		mangaStore.addManga(makeManga({ id: 'same', source: 'src' }));
+		mangaStore.updateProgress('same', 'src', 3, 20, { id: 'c1' });
+		const ref = mangaStore.find('same', 'src');
+		mangaStore.updateProgress('same', 'src', 3, 20, { id: 'c1' });
+		expect(mangaStore.find('same', 'src')).toBe(ref);
+	});
+
+	it('still writes when the page advances', () => {
+		mangaStore.addManga(makeManga({ id: 'adv', source: 'src' }));
+		mangaStore.updateProgress('adv', 'src', 3, 20, { id: 'c1' });
+		const ref = mangaStore.find('adv', 'src');
+		mangaStore.updateProgress('adv', 'src', 4, 20, { id: 'c1' });
+		expect(mangaStore.find('adv', 'src')).not.toBe(ref);
+		expect(mangaStore.find('adv', 'src')?.lastReadPage).toBe(4);
+	});
+});
+
+describe('MangaStore.updateMeta', () => {
+	it('updates metadata fields', () => {
+		mangaStore.addManga(makeManga({ id: 'meta', source: 'src' }));
+		mangaStore.updateMeta('meta', 'src', { lastChapterLabel: 'Cap. 12' });
+		expect(mangaStore.find('meta', 'src')?.lastChapterLabel).toBe('Cap. 12');
+	});
+
+	// Regressao do loop infinito do leitor: o effect que sincroniza o rotulo do
+	// capitulo depende do objeto `manga`; updateMeta sem mudanca real trocava o
+	// objeto e rerodava o effect para sempre (spinner eterno na estante).
+	it('is a no-op when the values are already current', () => {
+		mangaStore.addManga(makeManga({ id: 'noop', source: 'src' }));
+		mangaStore.updateMeta('noop', 'src', { lastChapterLabel: 'Cap. 1' });
+		const ref = mangaStore.find('noop', 'src');
+		mangaStore.updateMeta('noop', 'src', { lastChapterLabel: 'Cap. 1' });
+		expect(mangaStore.find('noop', 'src')).toBe(ref);
+	});
+
+	it('is safe for mangas outside the library', () => {
+		expect(() => mangaStore.updateMeta('ghost', 'src', { lastChapterLabel: 'x' })).not.toThrow();
+	});
 });
 
 describe('MangaStore chapter read state', () => {
