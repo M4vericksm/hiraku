@@ -31,6 +31,20 @@ class MangaDexSource:
         results = [self._map_manga(item, query) for item in data.get("data", [])]
         return sorted(results, key=lambda item: (item.score, -len(item.title)), reverse=True)
 
+    async def popular(self, limit: int = 20) -> list[MangaSearchResult]:
+        # followedCount e o ranking mais estavel da API: reflete quem a base
+        # acompanha, e nao um pico de acessos do dia.
+        params: list[tuple[str, str | int]] = [
+            ("limit", limit),
+            ("includes[]", "cover_art"),
+            ("order[followedCount]", "desc"),
+            ("hasAvailableChapters", "true"),
+            ("availableTranslatedLanguage[]", settings.default_language),
+        ]
+        data = await self._get("/manga", params=params)
+        # Sem reordenar: a ordem que a fonte devolveu *e* o ranking.
+        return [self._map_manga(item, "") for item in data.get("data", [])]
+
     async def chapters(self, manga_source_id: str, language: str = "pt-br") -> list[Chapter]:
         params: list[tuple[str, str | int]] = [
             ("limit", 100),

@@ -5,7 +5,7 @@
 	import { mangaStore } from '$lib/stores/manga.svelte';
 	import { ApiError, BackendApiService, resolveImageUrl, type Chapter } from '$lib/services/api';
 	import { offlineService } from '$lib/services/offline';
-	import { preferences, type ReadingMode } from '$lib/stores/preferences.svelte';
+	import { preferences, SCROLL_SPEEDS, type ReadingMode } from '$lib/stores/preferences.svelte';
 	import { pushBackHandler } from '$lib/services/backButton';
 	import {
 		ArrowLeft,
@@ -21,7 +21,9 @@
 		ZoomIn,
 		ZoomOut,
 		WifiOff,
-		List
+		List,
+		Play,
+		Pause
 	} from 'lucide-svelte';
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { cn } from '$lib/utils';
@@ -76,6 +78,92 @@
 		{ value: 'rtl', label: 'Paginado' },
 		{ value: 'vertical', label: 'Scroll' }
 	];
+
+	// ---------- Leitura automatica ----------
+	// O store ja guardava a velocidade, mas nada a consumia. Um nivel vale para
+	// os dois modos: no vertical vira px/s de rolagem continua, no paginado vira
+	// o intervalo entre viradas.
+	let autoPlaying = $state(false);
+	const speed = $derived(preferences.scrollSpeed);
+
+	/** rAF da rolagem continua. Guardado para poder cancelar. */
+	let scrollFrame: number | null = null;
+	/** Timer da virada de pagina no modo paginado. */
+	let pageTimer: ReturnType<typeof setInterval> | null = null;
+	/** Sobra fracionaria de pixel entre frames: sem isso, velocidades baixas
+	 *  arredondam para zero a cada frame e a pagina nunca sai do lugar. */
+	let scrollRemainder = 0;
+
+	function stopAuto() {
+		if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
+		if (pageTimer !== null) clearInterval(pageTimer);
+		scrollFrame = null;
+		pageTimer = null;
+		scrollRemainder = 0;
+	}
+
+	function startAuto() {
+		stopAuto();
+
+		if (readingMode === 'vertical') {
+			let previous = performance.now();
+			const step = (now: number) => {
+				const container = verticalContainer;
+				if (!container) return;
+
+				const elapsed = (now - previous) / 1000;
+				previous = now;
+
+				const exact = speed.pixelsPerSecond * elapsed + scrollRemainder;
+				const whole = Math.floor(exact);
+				scrollRemainder = exact - whole;
+				if (whole > 0) container.scrollTop += whole;
+
+				// Fim do capitulo: para em vez de rolar contra o batente.
+				const atEnd = container.scrollTop + container.clientHeight >= container.scrollHeight - 2;
+				if (atEnd) {
+					autoPlaying = false;
+					stopAuto();
+					return;
+				}
+				scrollFrame = requestAnimationFrame(step);
+			};
+			scrollFrame = requestAnimationFrame(step);
+			return;
+		}
+
+		pageTimer = setInterval(() => {
+			if (currentPage < pageUrls.length) {
+				setPage(currentPage + 1);
+			} else if (nextChapter) {
+				// Continua no proximo capitulo; o effect de carga reinicia o timer.
+				goToChapter(nextChapter);
+			} else {
+				autoPlaying = false;
+				stopAuto();
+			}
+		}, speed.secondsPerPage * 1000);
+	}
+
+	function toggleAuto() {
+		autoPlaying = !autoPlaying;
+		if (autoPlaying) resetControlsTimeout();
+	}
+
+	// Liga/desliga e reage a troca de velocidade, de modo e de capitulo sem
+	// precisar que cada ponto de mudanca lembre de reiniciar o timer.
+	$effect(() => {
+		if (!autoPlaying || isLoading || error || pageUrls.length === 0) {
+			stopAuto();
+			return;
+		}
+		// Dependencias explicitas: mudar qualquer uma reinicia com o valor novo.
+		void speed.level;
+		void readingMode;
+		void chapterId;
+		untrack(() => startAuto());
+		return stopAuto;
+	});
 
 	/** Object URLs precisam ser revogados na troca de capitulo, senao vazam memoria. */
 	function releasePages() {
@@ -330,6 +418,7 @@
 
 	onDestroy(() => {
 		clearTimeout(controlsTimeout);
+		stopAuto();
 		if (typeof document !== 'undefined') {
 			document.removeEventListener('fullscreenchange', handleFullscreenChange);
 		}
@@ -409,6 +498,30 @@
 				</div>
 			</div>
 			<div class="flex items-center gap-1">
+				<button
+					class={cn(
+						'flex h-9 w-9 items-center justify-center transition-colors',
+						autoPlaying ? 'text-[var(--accent)]' : 'hover:text-[var(--accent)]'
+					)}
+					onclick={(e) => {
+						e.stopPropagation();
+						toggleAuto();
+					}}
+					title={autoPlaying ? 'Pausar leitura automática' : 'Leitura automática'}
+					aria-pressed={autoPlaying}
+				>
+					{#if autoPlaying}
+						<Pause class="h-4 w-4" aria-hidden="true" />
+					{:else}
+						<Play class="h-4 w-4" aria-hidden="true" />
+					{/if}
+					<span class="sr-only">
+						{autoPlaying ? 'Pausar leitura automática' : 'Iniciar leitura automática'}
+					</span>
+				</button>
+
+				<div class="mx-1 h-5 w-px bg-white/20"></div>
+
 				<button
 					class="flex h-9 w-9 items-center justify-center transition-colors hover:text-[var(--accent)] disabled:opacity-40"
 					onclick={(e) => {
@@ -650,6 +763,44 @@
 							</button>
 						{/each}
 					</div>
+
+					<p class="kicker mt-8 mb-1">Leitura automática</p>
+					<p class="mb-3 text-xs leading-relaxed text-[var(--text-secondary)]">
+						{readingMode === 'vertical'
+							? `Rola sozinho a ${speed.pixelsPerSecond} px/s.`
+							: `Vira a página a cada ${speed.secondsPerPage}s.`}
+					</p>
+					<div class="flex flex-col gap-2">
+						{#each SCROLL_SPEEDS as option (option.level)}
+							<button
+								class={cn(
+									'flex items-center justify-between border p-3 text-left text-sm font-bold transition-colors',
+									speed.level === option.level
+										? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]'
+										: 'border-[var(--border)] hover:border-[var(--text-muted)]'
+								)}
+								onclick={() => preferences.setAutoScrollSpeedLevel(option.level)}
+							>
+								{option.label}
+								<span class="tabular text-[0.625rem] font-normal text-[var(--text-muted)]">
+									{readingMode === 'vertical'
+										? `${option.pixelsPerSecond} px/s`
+										: `${option.secondsPerPage}s`}
+								</span>
+							</button>
+						{/each}
+					</div>
+
+					<button
+						class={cn('mt-4 w-full', autoPlaying ? 'btn-ghost' : 'btn-primary')}
+						onclick={toggleAuto}
+					>
+						{#if autoPlaying}
+							<Pause class="h-4 w-4" aria-hidden="true" /> Pausar
+						{:else}
+							<Play class="h-4 w-4" aria-hidden="true" /> Iniciar
+						{/if}
+					</button>
 				{:else if chapters.length === 0}
 					<p class="kicker py-8 text-center">Carregando lista de capítulos…</p>
 				{:else}

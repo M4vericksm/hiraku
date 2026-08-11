@@ -41,6 +41,20 @@ async def search_manga(
         raise _source_unavailable(exc) from exc
 
 
+@router.get("/manga/popular", response_model=list[MangaSearchResult])
+async def popular_manga(
+    source: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=50),
+    service: CatalogService = Depends(get_catalog_service),
+) -> list[MangaSearchResult]:
+    try:
+        return await service.popular(source_id=source, limit=limit)
+    except UnknownSourceError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise _source_unavailable(exc) from exc
+
+
 @router.get("/manga/{source}/{source_manga_id}", response_model=MangaSearchResult)
 async def manga_detail(
     source: str,
