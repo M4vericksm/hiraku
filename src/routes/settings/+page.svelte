@@ -1,15 +1,43 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowLeft, Palette, Database, Shield, HardDrive, Trash2, Loader2 } from 'lucide-svelte';
+	import {
+		ArrowLeft,
+		Palette,
+		Database,
+		Shield,
+		HardDrive,
+		Trash2,
+		Loader2,
+		Server,
+		CheckCircle2,
+		XCircle
+	} from 'lucide-svelte';
 	import ThemeSwitcher from '$lib/components/ThemeSwitcher.svelte';
 	import { mangaStore } from '$lib/stores/manga.svelte';
 	import { offlineService, type OfflineChapterMeta } from '$lib/services/offline';
+	import { API_BASE, diagnoseConnection, type ConnectionDiagnosis } from '$lib/services/api';
 	import { formatBytes } from '$lib/utils';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 
 	let confirmClear = $state(false);
 	let confirmClearDownloads = $state(false);
+
+	// Diagnostico do servidor: a URL da API e fixada em tempo de build, entao
+	// mostra-la aqui e a unica forma de o usuario saber com qual backend este
+	// APK fala.
+	let diagnosis = $state<ConnectionDiagnosis | null>(null);
+	let diagnosing = $state(false);
+
+	async function testConnection() {
+		diagnosing = true;
+		diagnosis = null;
+		try {
+			diagnosis = await diagnoseConnection();
+		} finally {
+			diagnosing = false;
+		}
+	}
 
 	let downloads = $state<OfflineChapterMeta[]>([]);
 	let downloadsLoading = $state(true);
@@ -116,6 +144,54 @@
 					<p class="folio text-[var(--accent)]">{stats.completed}</p>
 					<p class="kicker mt-2">Concluídos</p>
 				</div>
+			</div>
+		</section>
+
+		<!-- Servidor -->
+		<section aria-labelledby="server-heading">
+			<div id="server-heading">
+				{@render sectionHead(Server, 'Servidor')}
+			</div>
+			<p class="-mt-3 mb-6 text-sm text-[var(--text-secondary)]">
+				Endereço do backend que este app consulta. É fixado quando o APK é gerado.
+			</p>
+
+			<div class="card p-5">
+				<p class="kicker mb-2">Endereço da API</p>
+				<p class="tabular mb-5 font-mono text-sm break-all text-[var(--text-primary)]">
+					{API_BASE}
+				</p>
+
+				<button onclick={testConnection} disabled={diagnosing} class="btn-ghost">
+					{#if diagnosing}
+						<Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+						Testando
+					{:else}
+						Testar conexão
+					{/if}
+				</button>
+
+				{#if diagnosis}
+					<div
+						class="mt-5 flex items-start gap-3 border-t border-[var(--border)] pt-4"
+						role="status"
+					>
+						{#if diagnosis.ok}
+							<CheckCircle2
+								class="mt-0.5 h-4 w-4 flex-shrink-0 text-green-500"
+								aria-hidden="true"
+							/>
+						{:else}
+							<XCircle
+								class="mt-0.5 h-4 w-4 flex-shrink-0 text-[var(--accent)]"
+								aria-hidden="true"
+							/>
+						{/if}
+						<p class="text-sm leading-relaxed text-[var(--text-secondary)]">
+							{diagnosis.detail}
+						</p>
+					</div>
+				{/if}
 			</div>
 		</section>
 
