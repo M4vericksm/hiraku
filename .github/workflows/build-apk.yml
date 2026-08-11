@@ -4,11 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       api_base:
-        description: 'VITE_API_BASE embutido no APK (ex.: http://192.168.1.42:8000 ou a URL do backend hospedado)'
+        description: 'VITE_API_BASE embutido no APK (ex.: https://hiraku-api.exemplo.com ou http://192.168.1.42:8000)'
         required: false
         type: string
-  push:
-    branches: [master, claude/front-images-074guk]
 
 permissions:
   contents: read
@@ -16,6 +14,8 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    env:
+      API_BASE: ${{ github.event.inputs.api_base || vars.VITE_API_BASE || 'http://localhost:8000' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,7 +34,22 @@ jobs:
       # Sem BASE_PATH: o APK serve o app da raiz, diferente do GitHub Pages.
       - run: npm run build
         env:
-          VITE_API_BASE: ${{ github.event.inputs.api_base || vars.VITE_API_BASE || 'http://localhost:8000' }}
+          VITE_API_BASE: ${{ env.API_BASE }}
+
+      # A URL da API e embutida no bundle em tempo de build. Se ela nao aparecer
+      # ali, o APK sai apontando para o fallback e falha no celular sem dizer o
+      # porque — entao o build quebra aqui, onde o diagnostico e barato.
+      - name: Confirma que a URL da API foi embutida no bundle
+        run: |
+          echo "API_BASE esperado: $API_BASE"
+          if grep -rqF "$API_BASE" build/_app/immutable/; then
+            echo "OK — a URL esta no bundle gerado."
+          else
+            echo "ERRO — '$API_BASE' nao aparece em build/_app/immutable/."
+            echo "URLs http(s) encontradas no bundle:"
+            grep -rhoE 'https?://[a-zA-Z0-9._:-]+' build/_app/immutable/ | sort -u | head -20
+            exit 1
+          fi
 
       - run: npx cap sync android
 
@@ -43,9 +58,16 @@ jobs:
       - run: ./gradlew assembleDebug
         working-directory: android
 
+      # O nome carrega o numero do run: assim da para saber, olhando o arquivo
+      # baixado, qual build esta instalado no aparelho.
+      - name: Renomeia o APK com o numero do build
+        run: |
+          mv android/app/build/outputs/apk/debug/app-debug.apk \
+             android/app/build/outputs/apk/debug/hiraku-build${{ github.run_number }}.apk
+
       - uses: actions/upload-artifact@v4
         with:
-          name: hiraku-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: hiraku-apk-build${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/hiraku-build${{ github.run_number }}.apk
           retention-days: 14
           if-no-files-found: error
