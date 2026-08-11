@@ -256,6 +256,14 @@ export class BackendApiService {
 		return request<SourceInfo[]>('/sources', { signal });
 	}
 
+	/** Destaques das fontes, para o catalogo ter conteudo antes de qualquer busca. */
+	static popular(source?: string, limit = 24, signal?: AbortSignal): Promise<MangaSearchResult[]> {
+		return request<MangaSearchResult[]>('/manga/popular', {
+			params: { limit: String(limit), ...(source ? { source } : {}) },
+			signal
+		});
+	}
+
 	static search(
 		query: string,
 		source?: string,

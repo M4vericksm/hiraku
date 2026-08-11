@@ -30,6 +30,20 @@ class MemoryTtlCache:
         return value
 
 
+def _interleave(batches: list[list[T]]) -> list[T]:
+    """Alterna entre as fontes em vez de concatenar.
+
+    Concatenando, a primeira fonte enche a grade inteira e as outras so
+    aparecem se sobrar espaco. Alternando, a vitrine mostra todas.
+    """
+    merged: list[T] = []
+    for index in range(max((len(batch) for batch in batches), default=0)):
+        for batch in batches:
+            if index < len(batch):
+                merged.append(batch[index])
+    return merged
+
+
 def _proxied(url: str | None) -> str | None:
     """Roteia a URL pelo proxy quando a fonte nao envia CORS."""
     if not url:
@@ -67,6 +81,31 @@ class CatalogService:
         results = [item for batch in batches for item in batch]
         ranked = sorted(results, key=lambda result: result.score, reverse=True)[:limit]
         return [self._with_proxied_cover(result) for result in ranked]
+
+    async def popular(
+        self, source_id: str | None = None, limit: int = 20
+    ) -> list[MangaSearchResult]:
+        adapters = [self.registry.get(source_id)] if source_id else self.registry.all()
+
+        async def _one(adapter) -> list[MangaSearchResult]:
+            fetch = getattr(adapter, "popular", None)
+            if fetch is None:
+                return []
+            key = f"popular:{adapter.info.id}:{limit}"
+            try:
+                return await self.cache.get_or_set(key, lambda f=fetch: f(limit))
+            except NotImplementedError:
+                # Fonte sem ranking proprio. Nao e falha: so nao contribui.
+                return []
+            except Exception:
+                # Mesma regra da busca: fonte caida nao apaga as outras.
+                logger.exception("Populares falharam em %s", adapter.info.id)
+                return []
+
+        batches = await asyncio.gather(*[_one(adapter) for adapter in adapters])
+        return [
+            self._with_proxied_cover(result) for result in _interleave(batches)[:limit]
+        ]
 
     async def detail(self, source_id: str, source_manga_id: str) -> MangaSearchResult:
         adapter = self.registry.get(source_id)

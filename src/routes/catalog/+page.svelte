@@ -21,6 +21,11 @@
 	let sources = $state<SourceInfo[]>([]);
 	let selectedSource = $state<string>('');
 
+	// Vitrine mostrada enquanto ninguem buscou nada: uma tela de catalogo vazia
+	// nao da ao usuario nada para fazer alem de adivinhar um titulo.
+	let popular = $state<MangaSearchResult[]>([]);
+	let popularLoading = $state(true);
+
 	// Carrega as fontes disponiveis assim que a tela monta.
 	$effect(() => {
 		BackendApiService.getSources()
@@ -33,6 +38,24 @@
 					err instanceof ApiError
 						? err.message
 						: 'Falha ao carregar as fontes. O backend está rodando?';
+			});
+	});
+
+	// Destaques: recarregam quando a fonte selecionada muda.
+	$effect(() => {
+		const source = selectedSource;
+		popularLoading = true;
+		BackendApiService.popular(source || undefined)
+			.then((res) => {
+				popular = res;
+			})
+			.catch((err) => {
+				// A vitrine e um extra: falhar nela nao pode tomar a tela de busca.
+				console.error('Falha ao carregar destaques', err);
+				popular = [];
+			})
+			.finally(() => {
+				popularLoading = false;
 			});
 	});
 
@@ -160,6 +183,32 @@
 				Tente outro termo ou troque a fonte selecionada.
 			</p>
 		</div>
+	{:else if popularLoading}
+		<VolumeGridSkeleton count={12} />
+	{:else if popular.length > 0}
+		<section aria-labelledby="populares">
+			<div class="mb-5 flex items-baseline justify-between border-b border-[var(--border)] pb-3">
+				<h2 id="populares" class="text-lg tracking-wide text-[var(--text-primary)] uppercase">
+					Em alta
+				</h2>
+				<span class="kicker">Mais acompanhados nas fontes</span>
+			</div>
+
+			<div
+				class="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+			>
+				{#each popular as item, i (item.source + item.source_id)}
+					<VolumeCard
+						href={resolve(`/manga/${item.source}/${item.source_id}`)}
+						title={item.title}
+						coverUrl={resolveImageUrl(item.cover_url)}
+						footnote={sourceName(item.source)}
+						action="Ver detalhes"
+						eager={i < 6}
+					/>
+				{/each}
+			</div>
+		</section>
 	{:else}
 		<div
 			class="registration halftone border border-dashed border-[var(--rule)] px-6 py-20 text-center"
