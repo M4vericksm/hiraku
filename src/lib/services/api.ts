@@ -1,4 +1,9 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+/**
+ * Definida em tempo de build. Exportada porque a tela de ajustes mostra para
+ * qual servidor o app fala: sem isso, "nao foi possivel conectar" nao diz se o
+ * problema e o servidor, a rede ou um APK antigo apontando para outro lugar.
+ */
+export const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
 
 /** Requisicoes JSON sao curtas; imagens podem demorar bem mais. */
 const JSON_TIMEOUT_MS = 15_000;
@@ -201,12 +206,61 @@ export async function fetchImageBlob(url: string, signal?: AbortSignal): Promise
 	return response.blob();
 }
 
+export type ConnectionDiagnosis =
+	| { ok: true; detail: string }
+	| { ok: false; reason: 'cors' | 'unreachable' | 'http'; detail: string };
+
+/**
+ * Testa o servidor e diz *por que* falhou.
+ *
+ * O fetch do navegador rejeita igual para "rede fora" e "CORS recusou a
+ * origem" — de proposito, para nao vazar informacao entre sites. Isso deixa o
+ * usuario de um backend auto-hospedado sem saber se o problema e a maquina, a
+ * URL do build ou a allowlist do servidor. A segunda tentativa em `no-cors`
+ * desempata: ela nao passa pela checagem de origem, entao se ela funciona o
+ * servidor esta de pe e o que falta e liberar a origem do app.
+ */
+export async function diagnoseConnection(signal?: AbortSignal): Promise<ConnectionDiagnosis> {
+	const url = `${API_BASE}/health`;
+
+	try {
+		const response = await fetch(url, { signal: withTimeout(JSON_TIMEOUT_MS, signal) });
+		if (response.ok) return { ok: true, detail: 'O servidor respondeu normalmente.' };
+		return {
+			ok: false,
+			reason: 'http',
+			detail: `O servidor respondeu ${response.status}. A URL existe, mas algo está errado do lado dele.`
+		};
+	} catch {
+		try {
+			await fetch(url, { mode: 'no-cors', signal: withTimeout(JSON_TIMEOUT_MS, signal) });
+			return {
+				ok: false,
+				reason: 'cors',
+				detail:
+					'O servidor está no ar, mas recusou a origem do app (CORS). Libere http://localhost em HIRAKU_CORS_ORIGINS e reinicie o backend.'
+			};
+		} catch {
+			return {
+				ok: false,
+				reason: 'unreachable',
+				detail:
+					'Não foi possível alcançar o servidor. Verifique a URL acima, se o backend está rodando e se este aparelho tem acesso a ele.'
+			};
+		}
+	}
+}
+
 export class BackendApiService {
 	static getSources(signal?: AbortSignal): Promise<SourceInfo[]> {
 		return request<SourceInfo[]>('/sources', { signal });
 	}
 
-	static search(query: string, source?: string, signal?: AbortSignal): Promise<MangaSearchResult[]> {
+	static search(
+		query: string,
+		source?: string,
+		signal?: AbortSignal
+	): Promise<MangaSearchResult[]> {
 		return request<MangaSearchResult[]>('/manga/search', {
 			params: { q: query, ...(source ? { source } : {}) },
 			signal
