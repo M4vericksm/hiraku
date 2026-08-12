@@ -14,6 +14,8 @@ ALLOWED_HOSTS = {
     "uploads.mangadex.org",
     "mangalivre.to",
     "www.mangalivre.to",
+    "mangalivre.blog",
+    "www.mangalivre.blog",
     "leitor.kamisama.com.br",
     "montetaiscanlator.xyz",
     "ninjacomics.xyz",
@@ -28,6 +30,7 @@ ALLOWED_HOST_SUFFIXES = (
     ".mangadex.network",
     ".mangadex.org",
     ".mangalivre.to",
+    ".mangalivre.blog",
     # Os sites Madara servem parte das paginas por uma CDN em subdominio
     # (ex.: cdn.montetaiscanlator.xyz), entao o sufixo tem que entrar junto.
     ".kamisama.com.br",
@@ -43,6 +46,7 @@ ALLOWED_HOST_SUFFIXES = (
 # Sites Madara checam Referer nas imagens de capitulo; sem ele vem 403.
 REFERERS = {
     "mangalivre.to": "https://mangalivre.to/",
+    "mangalivre.blog": "https://mangalivre.blog/",
     "kamisama.com.br": "https://leitor.kamisama.com.br/",
     "montetaiscanlator.xyz": "https://montetaiscanlator.xyz/",
     "ninjacomics.xyz": "https://ninjacomics.xyz/",

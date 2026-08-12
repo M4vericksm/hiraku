@@ -13,6 +13,7 @@ client = TestClient(app)
         "https://uploads.mangadex.org/covers/abc/def.jpg",
         "https://cmdxd98sb0x3yprd.mangadex.network/data/abc/1.jpg",
         "https://mangalivre.to/wp-content/uploads/1.webp",
+        "https://mangalivre.blog/wp-content/uploads/1.webp",
     ],
 )
 def test_allows_known_source_hosts(url):
@@ -39,8 +40,15 @@ def test_mangadex_images_skip_the_proxy():
     assert not needs_proxy("https://cmdxd98sb0x3yprd.mangadex.network/data/a/1.jpg")
 
 
-def test_mangalivre_images_need_the_proxy():
+def test_madara_images_need_the_proxy():
     assert needs_proxy("https://mangalivre.to/wp-content/uploads/1.webp")
+    assert needs_proxy("https://mangalivre.blog/wp-content/uploads/1.webp")
+
+
+def test_mangalivre_org_is_not_a_trusted_host():
+    # A fonte foi descartada (a API nao expoe as imagens das paginas), entao o
+    # dominio nao pode continuar valendo passe livre no proxy.
+    assert not is_allowed("https://mangalivre.org/wp-content/uploads/1.webp")
 
 
 def test_proxy_url_escapes_the_original_url():
@@ -52,6 +60,7 @@ def test_proxy_url_escapes_the_original_url():
 
 def test_referer_is_sent_only_where_required():
     assert referer_for("https://mangalivre.to/a.webp") == "https://mangalivre.to/"
+    assert referer_for("https://cdn.mangalivre.blog/a.webp") == "https://mangalivre.blog/"
     assert referer_for("https://uploads.mangadex.org/a.jpg") is None
 
 
