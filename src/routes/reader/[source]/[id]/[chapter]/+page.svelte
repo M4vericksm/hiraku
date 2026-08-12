@@ -79,6 +79,14 @@
 	let touchStartX = 0;
 	let touchStartY = 0;
 
+	const PROGRESS_SAVE_DELAY_MS = 600;
+	const PRELOAD_DISTANCE = 2;
+	let progressSaveTimer: ReturnType<typeof setTimeout> | null = null;
+	let pendingProgress:
+		| { mangaId: string; mangaSource: string; page: number; total: number; chapterId: string }
+		| null = null;
+	const preloadedPages = new Set<string>();
+
 	const READING_MODES: { value: ReadingMode; label: string; kanji: string }[] = [
 		{ value: 'ltr', label: 'Paginado (Esq. → Dir.)', kanji: '左開' },
 		{ value: 'rtl', label: 'Paginado (Dir. → Esq., mangá)', kanji: '右開' },
@@ -90,11 +98,13 @@
 			if (isOfflineSource) offlineService.revokePages(pageUrls);
 		});
 		pageUrls = [];
+		preloadedPages.clear();
 	}
 
 	let loadToken = 0;
 
 	async function loadChapter(currentSource: string, mangaId: string, currentChapterId: string) {
+		flushProgress();
 		const token = ++loadToken;
 		releasePages();
 		isLoading = true;
@@ -155,6 +165,7 @@
 					? Math.min(Math.max(saved.lastReadPage || 1, 1), urls.length)
 					: 1;
 			currentPage = resumePage;
+			preloadNearbyPages(resumePage);
 
 			mangaStore.updateProgress(mangaId, currentSource, resumePage, urls.length, {
 				id: currentChapterId
@@ -347,9 +358,64 @@
 		resetControlsTimeout();
 	}
 
-	function setPage(value: number) {
+	function flushProgress() {
+		if (!pendingProgress) return;
+		const progress = pendingProgress;
+		pendingProgress = null;
+		if (progressSaveTimer) {
+			clearTimeout(progressSaveTimer);
+			progressSaveTimer = null;
+		}
+		mangaStore.updateProgress(progress.mangaId, progress.mangaSource, progress.page, progress.total, {
+			id: progress.chapterId
+		});
+	}
+
+	function scheduleProgressSave(value: number) {
+		pendingProgress = {
+			mangaId: id,
+			mangaSource: source,
+			page: value,
+			total: pageUrls.length,
+			chapterId
+		};
+		if (progressSaveTimer) clearTimeout(progressSaveTimer);
+		progressSaveTimer = setTimeout(flushProgress, PROGRESS_SAVE_DELAY_MS);
+	}
+
+	function preloadPage(index: number) {
+		if (index < 0 || index >= pageUrls.length) return;
+		const url = pageUrls[index];
+		if (!url || preloadedPages.has(url) || typeof Image === 'undefined') return;
+		preloadedPages.add(url);
+		const img = new Image();
+		img.decoding = 'async';
+		img.src = url;
+	}
+
+	function preloadNearbyPages(pageNumber: number) {
+		if (readingMode === 'vertical') return;
+		for (let distance = 1; distance <= PRELOAD_DISTANCE; distance += 1) {
+			preloadPage(pageNumber - 1 + distance);
+			preloadPage(pageNumber - 1 - distance);
+		}
+	}
+
+	function setPage(value: number, options: { immediateSave?: boolean } = {}) {
 		currentPage = value;
-		mangaStore.updateProgress(id, source, value, pageUrls.length, { id: chapterId });
+		preloadNearbyPages(value);
+		if (options.immediateSave || value >= pageUrls.length) {
+			pendingProgress = {
+				mangaId: id,
+				mangaSource: source,
+				page: value,
+				total: pageUrls.length,
+				chapterId
+			};
+			flushProgress();
+		} else {
+			scheduleProgressSave(value);
+		}
 
 		if (value >= pageUrls.length) {
 			mangaStore.markChapterRead(id, source, chapterId);
@@ -482,10 +548,15 @@
 		isFullscreen = !!document.fullscreenElement;
 	}
 
+	function handleVisibilityChange() {
+		if (document.visibilityState === 'hidden') flushProgress();
+	}
+
 	let releaseBackHandler: (() => void) | null = null;
 
 	onMount(() => {
 		document.addEventListener('fullscreenchange', handleFullscreenChange);
+		document.addEventListener('visibilitychange', handleVisibilityChange);
 		resetControlsTimeout();
 
 		releaseBackHandler = pushBackHandler(() => {
@@ -502,11 +573,13 @@
 	});
 
 	onDestroy(() => {
+		flushProgress();
 		clearTimeout(controlsTimeout);
 		if (autoScrollAnimationId) cancelAnimationFrame(autoScrollAnimationId);
 		if (autoScrollIntervalId) clearInterval(autoScrollIntervalId);
 		if (typeof document !== 'undefined') {
 			document.removeEventListener('fullscreenchange', handleFullscreenChange);
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
 		}
 		releaseBackHandler?.();
 		releasePages();
