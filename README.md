@@ -8,7 +8,9 @@ que consome essa API. A biblioteca, o progresso de leitura e os capítulos
 baixados ficam apenas no dispositivo — o servidor só consulta as fontes e serve
 as imagens.
 
-Produção: https://m4vericksm.github.io/hiraku/
+O frontend é publicado no GitHub Pages (https://m4vericksm.github.io/hiraku/), mas o catálogo e a leitura
+online dependem do backend, que não está hospedado publicamente: para usar, rode os dois localmente (veja
+"Como rodar") ou aponte `VITE_API_BASE` para um backend seu.
 
 ## Funcionalidades
 
