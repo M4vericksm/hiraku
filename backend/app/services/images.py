@@ -25,6 +25,10 @@ ALLOWED_HOSTS = {
     "livre.xn--c5wx58dnej.online",
     # Capas e paginas da Drope Scan (sem CORS, passam pelo proxy).
     "bucket-1.dropescan.com",
+    # Imagens das scans no Blogger. Passam pelo proxy porque o CORS do Google
+    # e inconsistente: parte das imagens vem com `Access-Control-Allow-Origin`
+    # e parte nao, e sem ele o download offline (fetch) falha.
+    "blogger.googleusercontent.com",
 }
 
 ALLOWED_HOST_SUFFIXES = (
@@ -33,6 +37,7 @@ ALLOWED_HOST_SUFFIXES = (
     ".mangalivre.to",
     ".mangalivre.blog",
     ".xn--c5wx58dnej.online",
+    ".bp.blogspot.com",
     # Os sites Madara servem parte das paginas por uma CDN em subdominio
     # (ex.: cdn.montetaiscanlator.xyz), entao o sufixo tem que entrar junto.
     ".montetaiscanlator.xyz",
@@ -79,9 +84,6 @@ CORS_SAFE_HOST_SUFFIXES = (
     ".mangadex.network",
     # MangaFlix serve capas e paginas com `Access-Control-Allow-Origin: *`.
     ".mangaflix.net",
-    # Imagens dos blogs (Blogger) vem com `Access-Control-Allow-Origin: *`.
-    "blogger.googleusercontent.com",
-    ".bp.blogspot.com",
 )
 
 

@@ -15,8 +15,8 @@ O que muda de blog para blog:
 
 As paginas aparecem como `<img src>` ou numa lista em script
 (`wz_pages_chapter=[...]`); por isso a extracao pega, em ordem, toda URL de
-imagem do Blogger no conteudo. As imagens do Blogger vem com
-`Access-Control-Allow-Origin: *` e vao direto para o navegador.
+imagem do Blogger no conteudo. As imagens passam pelo proxy `/image`: o CORS
+do Google varia de imagem para imagem e o download offline precisa dele.
 """
 
 import html
