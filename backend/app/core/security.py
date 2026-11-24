@@ -14,6 +14,7 @@ trafego chega pelo cloudflared, e a Cloudflare sobrescreve esse cabecalho
 IP da conexao.
 """
 
+import ipaddress
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -33,6 +34,10 @@ class Limit:
 IMAGE_LIMIT = Limit("image", 1200)
 SEARCH_LIMIT = Limit("search", 90)
 DEFAULT_LIMIT = Limit("default", 600)
+
+# Cada pedido ao /image pode trazer ate 20 MB; contar so pedidos deixava um IP
+# puxar gigas por minuto. 600 MB/min cobre varios capitulos baixando juntos.
+IMAGE_BYTES_PER_MINUTE = 600 * 1024 * 1024
 
 # Rotas sem limite: healthcheck do Docker e da Cloudflare.
 EXEMPT_PATHS = {"/health"}
@@ -69,6 +74,22 @@ def client_ip(scope: Scope) -> str:
     return client[0] if client else "desconhecido"
 
 
+def client_key(scope: Scope) -> str:
+    """Chave do limite: o IP, ou o bloco /64 quando e IPv6.
+
+    Uma conexao IPv6 domestica recebe um /64 inteiro; contar por endereco
+    deixaria trocar de IP a cada pedido e passar por cima do limite.
+    """
+    ip = client_ip(scope)
+    try:
+        address = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if address.version == 6:
+        return str(ipaddress.ip_network(f"{address}/64", strict=False))
+    return ip
+
+
 class SlidingWindowLimiter:
     def __init__(self) -> None:
         self._hits: dict[tuple[str, str], deque[float]] = {}
@@ -98,6 +119,30 @@ class SlidingWindowLimiter:
                 del self._hits[key]
 
 
+class ByteBudget:
+    """Bytes servidos por chave na ultima janela de 60 s."""
+
+    def __init__(self) -> None:
+        self._sent: dict[str, deque[tuple[float, int]]] = {}
+
+    def used(self, key: str, now: float | None = None) -> int:
+        now = time.monotonic() if now is None else now
+        window = self._sent.get(key)
+        if not window:
+            return 0
+        while window and now - window[0][0] >= WINDOW_SECONDS:
+            window.popleft()
+        return sum(size for _, size in window)
+
+    def add(self, key: str, size: int, now: float | None = None) -> None:
+        now = time.monotonic() if now is None else now
+        if key not in self._sent and len(self._sent) >= MAX_TRACKED_KEYS:
+            stale = [k for k, w in self._sent.items() if not w or now - w[-1][0] >= WINDOW_SECONDS]
+            for k in stale or list(self._sent)[: len(self._sent) // 2]:
+                del self._sent[k]
+        self._sent.setdefault(key, deque()).append((now, size))
+
+
 class EdgeProtectionMiddleware:
     """Aplica o limite por IP e acrescenta os cabecalhos de seguranca."""
 
@@ -105,6 +150,7 @@ class EdgeProtectionMiddleware:
         self.app = app
         self.enabled = enabled
         self.limiter = SlidingWindowLimiter()
+        self.image_bytes = ByteBudget()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -113,15 +159,22 @@ class EdgeProtectionMiddleware:
 
         path = scope.get("path", "")
         limit = limit_for(path) if self.enabled and scope.get("method") != "OPTIONS" else None
+        key = client_key(scope)
         if limit is not None:
-            wait = self.limiter.hit((client_ip(scope), limit.bucket), limit.per_minute)
+            wait = self.limiter.hit((key, limit.bucket), limit.per_minute)
+            if not wait and limit is IMAGE_LIMIT:
+                if self.image_bytes.used(key) >= IMAGE_BYTES_PER_MINUTE:
+                    wait = WINDOW_SECONDS / 2
             if wait:
                 await _too_many_requests(send, wait)
                 return
+        count_bytes = limit is IMAGE_LIMIT
 
         extra = SECURITY_HEADERS + (IMAGE_HEADERS if path == "/image" else [])
 
         async def send_with_headers(message: Message) -> None:
+            if count_bytes and message["type"] == "http.response.body":
+                self.image_bytes.add(key, len(message.get("body", b"")))
             if message["type"] == "http.response.start":
                 headers = list(message.get("headers") or [])
                 present = {name.lower() for name, _ in headers}
