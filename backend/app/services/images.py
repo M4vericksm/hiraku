@@ -6,6 +6,9 @@ download offline le os bytes da pagina. O proxy resolve isso servindo a imagem
 a partir do nosso proprio dominio, com o Referer que a fonte espera.
 """
 
+import asyncio
+import ipaddress
+import socket
 from urllib.parse import quote, urljoin, urlparse
 
 import httpx
@@ -120,6 +123,36 @@ def sniff_image_type(head: bytes) -> str | None:
     return None
 
 
+# SVG e XML com script: servido no nosso dominio, viraria XSS. Pagina de
+# manga nunca e SVG.
+_BLOCKED_IMAGE_TYPES = ("image/svg", "image/svg+xml")
+
+
+async def resolve_ips(host: str) -> list[str]:
+    """IPs para onde o host aponta (separado para os testes substituirem)."""
+    loop = asyncio.get_running_loop()
+    infos = await loop.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    return [info[4][0] for info in infos]
+
+
+async def ensure_public_host(host: str) -> None:
+    """Recusa host que resolve para rede interna, loopback, link-local etc.
+
+    A allowlist confere o nome, mas um dominio de scan pode passar a apontar
+    para 127.0.0.1 ou para a rede do Docker (onde esta o Amparo). Sem esta
+    checagem o proxy iria ate la.
+    """
+    try:
+        addresses = await resolve_ips(host)
+    except OSError as exc:
+        raise ImageProxyError(f"Host nao resolve: {host}") from exc
+    if not addresses:
+        raise ImageProxyError(f"Host nao resolve: {host}")
+    for address in addresses:
+        if not ipaddress.ip_address(address.split("%", 1)[0]).is_global:
+            raise ImageProxyError(f"Host aponta para rede interna: {host}")
+
+
 class ImageProxyError(ValueError):
     """URL recusada antes de qualquer requisicao de rede."""
 
@@ -176,6 +209,7 @@ async def fetch_image(
     for _ in range(MAX_REDIRECTS + 1):
         if not is_allowed(current):
             raise ImageProxyError(f"Host nao permitido: {current}")
+        await ensure_public_host(urlparse(current).hostname or "")
 
         build_kwargs = {} if timeout is None else {"timeout": timeout}
         request = client.build_request(
@@ -194,6 +228,8 @@ async def fetch_image(
             response.raise_for_status()
 
             declared_type = response.headers.get("content-type", "")
+            if declared_type.lower().startswith(_BLOCKED_IMAGE_TYPES):
+                raise ImageProxyError("SVG nao e aceito pelo proxy")
             content_type = declared_type if declared_type.startswith("image/") else None
             if content_type is None and declared_type and not declared_type.startswith(
                 _SNIFFABLE_TYPES

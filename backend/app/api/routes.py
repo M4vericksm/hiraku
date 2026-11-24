@@ -1,3 +1,5 @@
+import logging
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -10,11 +12,16 @@ from app.sources.genres import CANONICAL
 from app.sources.registry import UnknownSourceError
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _source_unavailable(exc: Exception) -> HTTPException:
-    """Falha da fonte externa nao e culpa do cliente: responde 502."""
-    return HTTPException(status_code=502, detail=f"Fonte indisponivel: {exc}")
+    """Falha da fonte externa nao e culpa do cliente: responde 502.
+
+    O detalhe (URL interna, mensagem do httpx) fica so no log do servidor.
+    """
+    logger.warning("Fonte indisponivel: %s", exc)
+    return HTTPException(status_code=502, detail="Fonte indisponivel no momento")
 
 
 def _from_upstream_status(exc: httpx.HTTPStatusError, not_found: str) -> HTTPException:

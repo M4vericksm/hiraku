@@ -1,17 +1,33 @@
+# Hiraku em producao (VM compartilhada com o Amparo).
+#
+# Isolamento: rede propria e tunel Cloudflare proprio. O Hiraku nao entra na
+# rede do Amparo nem usa o tunel dele, entao nao alcanca o Amparo por dentro.
+# Limites de CPU/memoria/processos garantem que um pico no Hiraku nao derrube
+# a VM (e o Amparo junto).
+#
+# Uso, na pasta ~/hiraku da VM, com .env contendo HIRAKU_TUNNEL_TOKEN:
+#   docker compose -f docker-compose.prod.yml up -d --build
 services:
   api:
     build: .
     container_name: hiraku-api
     restart: unless-stopped
-    # So o cloudflared (no host) alcanca a API. Nao fica exposta na LAN.
-    ports:
-      - '127.0.0.1:8000:8000'
     environment:
-      # Origins do WebView do Capacitor (Android usa localhost como origin).
-      HIRAKU_CORS_ORIGINS: 'https://localhost,http://localhost,capacitor://localhost,ionic://localhost'
+      HIRAKU_CORS_ORIGINS: 'https://m4vericksm.github.io,https://localhost,http://localhost,capacitor://localhost,ionic://localhost'
       HIRAKU_DATABASE_URL: 'sqlite:////app/data/hiraku.db'
+      HIRAKU_DOCS: '0'
     volumes:
       - hiraku-data:/app/data
+    networks: [hiraku]
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cpus: 1.0
+    mem_limit: 512m
+    pids_limit: 256
     healthcheck:
       test:
         [
@@ -24,6 +40,32 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.11.0
+    container_name: hiraku-cloudflared
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${HIRAKU_TUNNEL_TOKEN:?defina HIRAKU_TUNNEL_TOKEN no .env}
+    depends_on: [api]
+    networks: [hiraku]
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cpus: 0.5
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options: { max-size: '10m', max-file: '3' }
+
+networks:
+  hiraku:
+    name: hiraku_net
 
 volumes:
   hiraku-data:

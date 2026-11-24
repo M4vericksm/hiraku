@@ -130,7 +130,7 @@ src/
 
 ```bash
 npm install
-pip install -r backend/requirements.txt
+pip install -r backend/requirements-dev.txt
 
 # Frontend (5173) e backend (8000) juntos
 npm run dev:all
