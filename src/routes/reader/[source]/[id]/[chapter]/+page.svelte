@@ -29,6 +29,7 @@
 		FastForward
 	} from 'lucide-svelte';
 	import { onMount, onDestroy, untrack } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { cn } from '$lib/utils';
 
 	const source = $derived(page.params.source ?? '');
@@ -82,10 +83,58 @@
 	const PROGRESS_SAVE_DELAY_MS = 600;
 	const PRELOAD_DISTANCE = 2;
 	let progressSaveTimer: ReturnType<typeof setTimeout> | null = null;
-	let pendingProgress:
-		| { mangaId: string; mangaSource: string; page: number; total: number; chapterId: string }
-		| null = null;
+	let pendingProgress: {
+		mangaId: string;
+		mangaSource: string;
+		page: number;
+		total: number;
+		chapterId: string;
+	} | null = null;
+	// Cache de pre-carregamento, nao estado de tela: reatividade aqui so geraria
+	// re-render a cada imagem aquecida.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity
 	const preloadedPages = new Set<string>();
+
+	// Pagina que nao carregou ganha uma segunda chance com URL nova: os nos do
+	// MD@Home caem e voltam, e no celular a rede oscila. Se falhar de novo, a
+	// pagina vira um botao de "tentar de novo" em vez do icone quebrado.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity
+	const retriedPages = new Set<number>();
+	const failedPages = new SvelteSet<number>();
+
+	async function handlePageError(index: number) {
+		if (isOfflineSource || retriedPages.has(index)) {
+			failedPages.add(index);
+			return;
+		}
+		retriedPages.add(index);
+		const token = loadToken;
+		try {
+			const res = await BackendApiService.getPages(source, chapterId);
+			if (token !== loadToken) return;
+			const fresh = resolveImageUrl(res.page_urls[index]);
+			if (!fresh) {
+				failedPages.add(index);
+				return;
+			}
+			// Mesma URL de antes: muda o src para o navegador pedir de novo.
+			pageUrls[index] = fresh === pageUrls[index] ? withRetryParam(fresh) : fresh;
+		} catch {
+			if (token === loadToken) failedPages.add(index);
+		}
+	}
+
+	function retryPage(index: number) {
+		retriedPages.delete(index);
+		failedPages.delete(index);
+		const url = pageUrls[index];
+		if (url) pageUrls[index] = withRetryParam(url);
+	}
+
+	function withRetryParam(url: string): string {
+		const clean = url.replace(/[?&]_r=\d+$/, '');
+		return `${clean}${clean.includes('?') ? '&' : '?'}_r=${Date.now()}`;
+	}
 
 	const READING_MODES: { value: ReadingMode; label: string; kanji: string }[] = [
 		{ value: 'ltr', label: 'Paginado (Esq. → Dir.)', kanji: '左開' },
@@ -99,6 +148,8 @@
 		});
 		pageUrls = [];
 		preloadedPages.clear();
+		retriedPages.clear();
+		failedPages.clear();
 	}
 
 	let loadToken = 0;
@@ -366,9 +417,15 @@
 			clearTimeout(progressSaveTimer);
 			progressSaveTimer = null;
 		}
-		mangaStore.updateProgress(progress.mangaId, progress.mangaSource, progress.page, progress.total, {
-			id: progress.chapterId
-		});
+		mangaStore.updateProgress(
+			progress.mangaId,
+			progress.mangaSource,
+			progress.page,
+			progress.total,
+			{
+				id: progress.chapterId
+			}
+		);
 	}
 
 	function scheduleProgressSave(value: number) {
@@ -865,7 +922,17 @@
 						)}
 					>
 						{#each pageUrls as url, i (i)}
-							{#if url}
+							{#if url && failedPages.has(i)}
+								<button
+									type="button"
+									data-page={i + 1}
+									class="flex aspect-[2/3] w-full flex-col items-center justify-center gap-2 font-mono text-xs text-[var(--text-muted)]"
+									onclick={() => retryPage(i)}
+								>
+									<span>Página {i + 1} não carregou</span>
+									<span class="text-[var(--accent)]">Tocar para tentar de novo</span>
+								</button>
+							{:else if url}
 								<img
 									data-page={i + 1}
 									src={url}
@@ -873,6 +940,7 @@
 									class="h-auto w-full origin-top"
 									style="width: {zoomLevel * 100}%;"
 									loading={i < 3 ? 'eager' : 'lazy'}
+									onerror={() => handlePageError(i)}
 								/>
 							{:else}
 								<div
@@ -926,12 +994,25 @@
 							zoomLevel > 1 ? 'items-start justify-start' : 'items-center justify-center'
 						)}
 					>
-						{#if pageUrls[currentPage - 1]}
+						{#if pageUrls[currentPage - 1] && failedPages.has(currentPage - 1)}
+							<button
+								type="button"
+								class="m-auto flex aspect-[2/3] max-h-full w-full max-w-md flex-col items-center justify-center gap-2 border border-white/10 font-mono text-xs text-white/40"
+								onclick={(event) => {
+									event.stopPropagation();
+									retryPage(currentPage - 1);
+								}}
+							>
+								<span>Página {currentPage} não carregou</span>
+								<span class="text-[var(--accent)]">Tocar para tentar de novo</span>
+							</button>
+						{:else if pageUrls[currentPage - 1]}
 							<img
 								src={pageUrls[currentPage - 1]}
 								alt={`Página ${currentPage}`}
 								class="m-auto h-auto max-w-none object-contain"
 								style="width: {zoomLevel * 100}%; max-height: {zoomLevel === 1 ? '100%' : 'none'};"
+								onerror={() => handlePageError(currentPage - 1)}
 							/>
 						{:else}
 							<!-- Parcial: sem isto o `src=""` virava icone de imagem quebrada. -->

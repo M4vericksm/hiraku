@@ -37,6 +37,8 @@
 
 		// O servico do botao voltar nao importa o roteador: quem sabe a rota
 		// inicial (e o `base` do adapter) e o layout.
+		// `path` ja chega resolvido (com o `base`): resolve() de novo duplicaria o prefixo.
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
 		setHomeNavigation(`${base}/`, (path) => void goto(path));
 
 		setExitPrompt(() => {
