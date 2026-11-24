@@ -8,7 +8,8 @@ que consome essa API. A biblioteca, o progresso de leitura e os capítulos
 baixados ficam apenas no dispositivo — o servidor só consulta as fontes e serve
 as imagens.
 
-Produção: https://m4vericksm.github.io/hiraku/
+Produção: https://m4vericksm.github.io/hiraku/ (frontend) e
+https://hiraku-api.yoopix.com.br (API).
 
 ## Funcionalidades
 
@@ -43,10 +44,19 @@ Produção: https://m4vericksm.github.io/hiraku/
 As fontes são adapters isolados, um módulo por fonte, atrás do contrato
 `SourceAdapter`. Adicionar uma fonte não exige tocar no resto do sistema.
 
-| Fonte      | Acesso        |
-| ---------- | ------------- |
-| MangaDex   | API pública   |
-| MangaLivre | Scraping HTML |
+| Fonte           | Acesso                      |
+| --------------- | --------------------------- |
+| MangaDex        | API pública                 |
+| MangaLivre      | Scraping HTML               |
+| MangaLivre.blog | API do WordPress + HTML     |
+| Monte Tai       | Scraping HTML (tema Madara) |
+| Euphoria Scan   | Scraping HTML (tema Madara) |
+| Inka PK         | Scraping HTML (tema Madara) |
+
+As capas do MangaDex não carregam fora do site deles: o `uploads.mangadex.org`
+responde com um desafio anti-bot quando o pedido vem de outro site. Os cards
+dessas obras mostram a capa tipográfica; as páginas dos capítulos carregam
+normalmente. Por isso os destaques do catálogo usam MangaLivre e MangaLivre.blog.
 
 ## Proxy de imagens
 
@@ -142,7 +152,11 @@ Testes do backend: `cd backend && python -m pytest`.
 O frontend é publicado no **GitHub Pages** a cada push na `master`, via
 `.github/workflows/deploy.yml`. O build usa `BASE_PATH=/hiraku` e o
 `adapter-static` gera `404.html` como fallback de SPA. O backend precisa ser
-hospedado à parte.
+hospedado à parte: hoje ele roda em Docker numa VM, atrás de um Cloudflare
+Tunnel.
+
+O APK é gerado pelo workflow **Build Android APK** (disparo manual no
+Actions), que já embute `https://hiraku-api.yoopix.com.br` como API.
 
 ## Próximos passos
 
@@ -150,7 +164,6 @@ hospedado à parte.
 - Login com JWT.
 - Jobs de sincronização com limite de frequência por fonte.
 - Cache persistente de páginas com TTL e quota.
-- App Android consumindo essa API.
 
 ## Decisões importantes
 
