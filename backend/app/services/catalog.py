@@ -12,6 +12,7 @@ from app.sources.registry import SourceRegistry, default_registry
 T = TypeVar("T")
 
 MIN_PER_SOURCE = 12
+MAX_CACHE_ITEMS = 5000
 SEARCH_SOURCE_TIMEOUT_SECONDS = 8
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,14 @@ class MemoryTtlCache:
             return item[1]  # type: ignore[return-value]
 
         value = await factory()
+        if len(self._items) >= MAX_CACHE_ITEMS:
+            # Sem isso o dicionario so crescia: chave vencida nunca saia, e o
+            # processo fica no ar por semanas.
+            self._items = {k: v for k, v in self._items.items() if v[0] > now}
+            if len(self._items) >= MAX_CACHE_ITEMS:
+                oldest = sorted(self._items, key=lambda k: self._items[k][0])
+                for stale in oldest[: len(oldest) // 2]:
+                    del self._items[stale]
         self._items[key] = (now + self.ttl_seconds, value)
         return value
 
@@ -78,7 +87,9 @@ class CatalogService:
                 # Em multi-fonte uma fonte lenta nao segura a resposta das outras.
                 return await asyncio.wait_for(lookup, SEARCH_SOURCE_TIMEOUT_SECONDS)
             except TimeoutError:
-                logger.warning("Busca em %s passou de %ss", adapter.info.id, SEARCH_SOURCE_TIMEOUT_SECONDS)
+                logger.warning(
+                    "Busca em %s passou de %ss", adapter.info.id, SEARCH_SOURCE_TIMEOUT_SECONDS
+                )
                 return []
             except Exception:
                 # Uma fonte morta nao pode apagar o resultado das outras.

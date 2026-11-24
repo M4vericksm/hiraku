@@ -10,7 +10,7 @@ from app.core import http
 from app.core.config import settings
 from app.db.models import Base
 from app.db.session import engine
-from app.sources.base import SourceBusyError, SourceNotFoundError
+from app.sources.base import SourceNotFoundError
 
 
 @asynccontextmanager
@@ -42,13 +42,6 @@ def create_app() -> FastAPI:
     @app.exception_handler(SourceNotFoundError)
     async def _not_found(_: Request, exc: SourceNotFoundError) -> JSONResponse:
         return JSONResponse(status_code=404, content={"detail": str(exc)})
-
-    @app.exception_handler(SourceBusyError)
-    async def _busy(_: Request, exc: SourceBusyError) -> JSONResponse:
-        # 503 + Retry-After: o app mostra "fonte ocupada" sem martelar a fonte.
-        return JSONResponse(
-            status_code=503, content={"detail": str(exc)}, headers={"Retry-After": "120"}
-        )
 
     return app
 

@@ -49,6 +49,11 @@ def test_cover_upscales_feed_thumbnail():
     assert _cover(entry) == f"{IMG}z/s400/capa.jpg"
 
 
+def test_cover_upscales_suffix_style_thumbnail():
+    entry = {"media$thumbnail": {"url": f"{IMG}z=s72-c"}}
+    assert _cover(entry) == f"{IMG}z=s400"
+
+
 def test_series_label_candidates_skip_genres_and_scores(monkeypatch):
     site = BloggerSite("x", "X", "https://x.blogspot.com", chapter_label="Capítulo")
     source = BloggerSource(site)

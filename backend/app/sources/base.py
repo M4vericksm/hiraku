@@ -7,10 +7,6 @@ class SourceNotFoundError(LookupError):
     """A fonte respondeu, mas a obra/capitulo pedido nao existe nela (vira 404)."""
 
 
-class SourceBusyError(RuntimeError):
-    """A fonte pediu para esperar (HTTP 429); vira 503 em vez de insistir."""
-
-
 class SourceAdapter(Protocol):
     @property
     def info(self) -> SourceInfo:

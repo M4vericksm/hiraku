@@ -292,7 +292,9 @@ def _cover(entry: dict) -> str | None:
     thumb = (entry.get("media$thumbnail") or {}).get("url")
     if thumb:
         # O feed entrega a miniatura 72px; o mesmo arquivo serve em 400px.
-        return re.sub(r"/s\d+(?:-c)?/", "/s400/", thumb)
+        # Dois formatos de URL: .../s72-c/arquivo.jpg e ...=s72-c no fim.
+        thumb = re.sub(r"/s\d+(?:-c)?/", "/s400/", thumb)
+        return re.sub(r"=s\d+(?:-c)?$", "=s400", thumb)
     pages = extract_page_urls(_content(entry))
     return pages[0] if pages else None
 
