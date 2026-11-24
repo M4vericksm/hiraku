@@ -61,10 +61,19 @@ def test_mangalivre_net_is_not_registered() -> None:
 
 def test_source_without_4th_field_keeps_default_manga_path() -> None:
     # Quem nao declara `manga_paths` serve as obras sob /manga/ mesmo.
-    assert default_registry().get("kamisama")._manga_paths == ("manga",)
+    assert default_registry().get("montetai")._manga_paths == ("manga",)
 
 
 def test_4th_field_overrides_manga_path() -> None:
     # inkapk publica em /obras/; sem repassar a 4a posicao da tupla o adapter
     # montaria /manga/<slug>/ e todo detalhe viria 404.
     assert default_registry().get("inkapk")._manga_paths == ("obras",)
+
+
+@pytest.mark.parametrize(
+    "source_id", ["kamisama", "ninjascan", "fleurblanche", "ghostscan", "hanamiheaven"]
+)
+def test_broken_sources_are_not_registered(source_id: str) -> None:
+    # Fora do ar, sem catalogo ou atras de anti-bot: so gastariam timeout.
+    with pytest.raises(UnknownSourceError):
+        default_registry().get(source_id)

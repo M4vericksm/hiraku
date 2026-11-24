@@ -30,18 +30,19 @@ class SourceRegistry:
 # (`wp-content/themes/madara`, blocos `c-tabs-item__content`) e com a listagem
 # de capitulos vindo pelo AJAX do tema. Sao scans pequenas: domino e markup
 # mudam sem aviso, por isso `risk="high"`.
+# Fora do registro (verificado em 24/11/2026):
+# - leitor.kamisama.com.br virou pagina "Em breve", sem catalogo.
+# - fbsquadx.com (Fleur Blanche) e ghostscan.xyz nao resolvem mais em DNS.
+# - ninjacomics.xyz e hanamiheaven.org ficaram atras do anti-bot da Hostinger,
+#   que devolve 403 para requisicoes de servidor. Nao contornamos protecao
+#   anti-bot: se o site bloqueia, a fonte sai.
 # toonlivre.com saiu do ar (o dominio nao resolve mais em DNS). Ficava so
 # gastando o timeout de cada busca para sempre devolver lista vazia.
 PTBR_MADARA_SOURCES = (
     # id, nome, base_url, manga_paths (opcional; default ("manga",))
-    ("kamisama", "Kami Sama Explorer", "https://leitor.kamisama.com.br"),
     ("montetai", "Monte Tai", "https://montetaiscanlator.xyz"),
-    ("ninjascan", "Ninja Scan", "https://ninjacomics.xyz"),
     ("euphoriascan", "Euphoria Scan", "https://euphoriascan.com"),
-    ("fleurblanche", "Fleur Blanche", "https://fbsquadx.com"),
-    ("ghostscan", "Ghost Scan", "https://ghostscan.xyz"),
     ("inkapk", "Inka PK", "https://inkapk.net", ("obras",)),
-    ("hanamiheaven", "Hanami Heaven", "https://hanamiheaven.org"),
     # mangalivre.blog nao entra aqui: roda WordPress com tema proprio, nao
     # Madara. Tem adapter dedicado (`MangaLivreBlogSource`), registrado abaixo.
     # mangalivre.org ficou de fora, e nao por catalogo: ele lista ~12k obras
