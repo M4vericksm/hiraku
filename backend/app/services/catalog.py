@@ -11,6 +11,10 @@ from app.sources.registry import SourceRegistry, default_registry
 
 T = TypeVar("T")
 
+MIN_PER_SOURCE = 12
+MAX_CACHE_ITEMS = 5000
+SEARCH_SOURCE_TIMEOUT_SECONDS = 8
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,6 +30,14 @@ class MemoryTtlCache:
             return item[1]  # type: ignore[return-value]
 
         value = await factory()
+        if len(self._items) >= MAX_CACHE_ITEMS:
+            # Sem isso o dicionario so crescia: chave vencida nunca saia, e o
+            # processo fica no ar por semanas.
+            self._items = {k: v for k, v in self._items.items() if v[0] > now}
+            if len(self._items) >= MAX_CACHE_ITEMS:
+                oldest = sorted(self._items, key=lambda k: self._items[k][0])
+                for stale in oldest[: len(oldest) // 2]:
+                    del self._items[stale]
         self._items[key] = (now + self.ttl_seconds, value)
         return value
 
@@ -55,14 +67,30 @@ class CatalogService:
         # deixaria uma fonte sem candidato ja na segunda rodada. O teto e alto
         # de proposito — as scans PT-BR tem catalogo pequeno e se esgotam
         # rapido, entao quem ainda tem candidato precisa poder preencher.
-        per_source = limit if source_id else min(limit * 2, 60)
+        #
+        # Com muitas fontes, pedir 60 de cada uma fazia as Madara paginarem a
+        # busca ate 5 vezes em sequencia e a busca agregada passava de 20 s.
+        # O dobro do limite dividido entre as fontes (com piso) ja preenche o
+        # interleave.
+        per_source = (
+            limit
+            if source_id
+            else min(60, max(MIN_PER_SOURCE, -(-limit * 2 // max(len(adapters), 1))))
+        )
 
         async def _one(adapter) -> list[MangaSearchResult]:
             key = f"search:{adapter.info.id}:{query.strip().lower()}:{per_source}"
             try:
-                return await self.cache.get_or_set(
-                    key, lambda a=adapter: a.search(query, per_source)
+                lookup = self.cache.get_or_set(key, lambda a=adapter: a.search(query, per_source))
+                if source_id:
+                    return await lookup
+                # Em multi-fonte uma fonte lenta nao segura a resposta das outras.
+                return await asyncio.wait_for(lookup, SEARCH_SOURCE_TIMEOUT_SECONDS)
+            except TimeoutError:
+                logger.warning(
+                    "Busca em %s passou de %ss", adapter.info.id, SEARCH_SOURCE_TIMEOUT_SECONDS
                 )
+                return []
             except Exception:
                 # Uma fonte morta nao pode apagar o resultado das outras.
                 # Em busca de fonte unica o caller ainda recebe lista vazia e

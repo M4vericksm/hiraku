@@ -70,3 +70,55 @@ def test_interleave_ignora_fontes_sem_resultado() -> None:
 
 def test_interleave_sem_resultado_algum_devolve_lista_vazia() -> None:
     assert CatalogService._interleave([[], []], limit=5) == []
+
+
+def test_slow_source_does_not_hold_the_aggregated_search(monkeypatch) -> None:
+    import asyncio
+    import time
+
+    import app.services.catalog as catalog_module
+    from app.domain.schemas import SourceInfo
+    from app.services.catalog import MemoryTtlCache
+    from app.sources.registry import SourceRegistry
+
+    class Fake:
+        def __init__(self, source_id: str, delay: float) -> None:
+            self._id = source_id
+            self._delay = delay
+
+        @property
+        def info(self) -> SourceInfo:
+            return SourceInfo(id=self._id, name=self._id)
+
+        async def search(self, query: str, limit: int = 10):
+            await asyncio.sleep(self._delay)
+            return [_result(self._id, "1", 0.9)]
+
+    registry = SourceRegistry()
+    registry.register(Fake("rapida", 0))
+    registry.register(Fake("lenta", 5))
+    monkeypatch.setattr(catalog_module, "SEARCH_SOURCE_TIMEOUT_SECONDS", 0.2)
+
+    service = CatalogService(registry, MemoryTtlCache(ttl_seconds=60))
+    started = time.monotonic()
+    results = asyncio.run(service.search("x", limit=10))
+    assert time.monotonic() - started < 2
+    assert [r.source for r in results] == ["rapida"]
+
+
+def test_cache_drops_expired_and_stays_bounded(monkeypatch) -> None:
+    import asyncio
+
+    import app.services.catalog as catalog_module
+    from app.services.catalog import MemoryTtlCache
+
+    monkeypatch.setattr(catalog_module, "MAX_CACHE_ITEMS", 10)
+    cache = MemoryTtlCache(ttl_seconds=60)
+
+    async def fill() -> None:
+        for index in range(25):
+            await cache.get_or_set(f"k{index}", lambda i=index: asyncio.sleep(0, result=i))
+
+    asyncio.run(fill())
+    assert len(cache._items) <= 10
+    assert "k24" in cache._items  # o mais novo sempre fica

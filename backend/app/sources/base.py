@@ -3,6 +3,10 @@ from typing import Protocol
 from app.domain.schemas import Chapter, ChapterPages, MangaSearchResult, SourceInfo
 
 
+class SourceNotFoundError(LookupError):
+    """A fonte respondeu, mas a obra/capitulo pedido nao existe nela (vira 404)."""
+
+
 class SourceAdapter(Protocol):
     @property
     def info(self) -> SourceInfo:

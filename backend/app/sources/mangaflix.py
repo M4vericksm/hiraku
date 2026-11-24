@@ -17,6 +17,7 @@ import asyncio
 import time
 
 from app.core.http import get_client
+from app.sources.base import SourceNotFoundError
 from app.domain.schemas import Chapter, ChapterPages, MangaSearchResult, SourceInfo
 from app.sources.genres import normalize_genres
 from app.sources.normalization import chapter_sort_key, parse_chapter_number, title_score
@@ -63,7 +64,7 @@ class MangaFlixSource:
         work = await self._work(manga_source_id)
         result = self._map_work(work)
         if result is None:
-            raise ValueError(f"Obra sem dados: {manga_source_id}")
+            raise SourceNotFoundError(f"Obra sem dados: {manga_source_id}")
         genre_names = await self._genre_names(work.get("genres") or [])
         result.genres = normalize_genres(genre_names)
         result.score = 1.0

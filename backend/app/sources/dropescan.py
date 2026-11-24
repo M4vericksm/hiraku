@@ -18,6 +18,7 @@ import asyncio
 import time
 
 from app.core.http import get_client
+from app.sources.base import SourceNotFoundError
 from app.domain.schemas import Chapter, ChapterPages, MangaSearchResult, SourceInfo
 from app.sources.genres import normalize_genres
 from app.sources.normalization import chapter_sort_key, parse_chapter_number, title_score
@@ -65,7 +66,7 @@ class DropeScanSource:
         obra = (await self._catalog_by_id()).get(manga_source_id)
         result = self._map_obra(obra) if obra else None
         if result is None:
-            raise ValueError(f"Obra nao encontrada na Drope Scan: {manga_source_id}")
+            raise SourceNotFoundError(f"Obra nao encontrada na Drope Scan: {manga_source_id}")
         result.score = 1.0
         return result
 

@@ -163,3 +163,16 @@ def test_mangaflix_images_go_direct():
     # static./cdn.mangaflix.net respondem com Access-Control-Allow-Origin: *.
     assert not needs_proxy("https://cdn.mangaflix.net/abc.jpg")
     assert not needs_proxy("https://static.mangaflix.net/up/x/optimized.jpg")
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvX/s1600/1.jpg",
+        "https://1.bp.blogspot.com/-abc/s1600/1.jpg",
+    ],
+)
+def test_blogger_images_go_through_the_proxy(url):
+    # Parte das imagens do Blogger vem sem CORS; o download offline quebrava.
+    assert is_allowed(url)
+    assert needs_proxy(url)
