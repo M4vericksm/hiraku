@@ -10,12 +10,14 @@ def test_health_endpoint() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_sources_endpoint_lists_mangadex() -> None:
+def test_sources_endpoint_lists_sources_without_mangadex() -> None:
     client = TestClient(app)
     response = client.get("/sources")
     assert response.status_code == 200
     sources = response.json()
-    assert sources[0]["id"] == "mangadex"
+    ids = [source["id"] for source in sources]
+    assert "mangalivre" in ids
+    assert "mangadex" not in ids
 
 
 def test_source_not_found_maps_to_404(monkeypatch):

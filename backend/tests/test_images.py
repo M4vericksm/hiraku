@@ -22,8 +22,6 @@ client = TestClient(app)
 @pytest.mark.parametrize(
     "url",
     [
-        "https://uploads.mangadex.org/covers/abc/def.jpg",
-        "https://cmdxd98sb0x3yprd.mangadex.network/data/abc/1.jpg",
         "https://mangalivre.to/wp-content/uploads/1.webp",
         "https://mangalivre.blog/wp-content/uploads/1.webp",
     ],
@@ -46,14 +44,9 @@ def test_rejects_untrusted_urls(url):
     assert not is_allowed(url)
 
 
-def test_mangadex_images_skip_the_proxy():
-    """MangaDex ja envia CORS, entao nao precisa passar pelo nosso servidor.
-
-    Pelo proxy as capas tambem nao viriam: o MangaDex responde ao IP do
-    servidor com desafio anti-bot.
-    """
-    assert not needs_proxy("https://uploads.mangadex.org/covers/a/b.jpg")
-    assert not needs_proxy("https://cmdxd98sb0x3yprd.mangadex.network/data/a/1.jpg")
+def test_mangadex_is_no_longer_proxied():
+    assert not is_allowed("https://uploads.mangadex.org/covers/a/b.jpg")
+    assert not is_allowed("https://cmdxd98sb0x3yprd.mangadex.network/data/a/1.jpg")
 
 
 def test_madara_images_need_the_proxy():
@@ -77,7 +70,7 @@ def test_proxy_url_escapes_the_original_url():
 def test_referer_is_sent_only_where_required():
     assert referer_for("https://mangalivre.to/a.webp") == "https://mangalivre.to/"
     assert referer_for("https://cdn.mangalivre.blog/a.webp") == "https://mangalivre.blog/"
-    assert referer_for("https://uploads.mangadex.org/a.jpg") is None
+    assert referer_for("https://cdn.mangaflix.net/a.jpg") is None
 
 
 def test_image_endpoint_rejects_untrusted_host():

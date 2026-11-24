@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes import router
 from app.core import http
 from app.core.config import settings
+from app.core.security import EdgeProtectionMiddleware
 from app.db.models import Base
 from app.db.session import engine
 from app.sources.base import SourceNotFoundError
@@ -29,12 +30,20 @@ def create_app() -> FastAPI:
         version="0.1.0",
         description="Backend para catalogo, fontes e leitura de mangas.",
         lifespan=lifespan,
+        docs_url="/docs" if settings.docs_enabled else None,
+        redoc_url="/redoc" if settings.docs_enabled else None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
+    # Ordem importa: o ultimo adicionado e o mais externo. O CORS fica por
+    # fora do limite para que o 429 chegue ao navegador com Access-Control-*
+    # (sem isso o app veria "erro de rede" em vez de "muitas requisicoes").
+    app.add_middleware(EdgeProtectionMiddleware, enabled=settings.rate_limit_enabled)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
+        # O app nao usa cookie nem auth: credencial cross-origin so abriria porta.
+        allow_credentials=False,
+        allow_methods=["GET"],
         allow_headers=["*"],
     )
     app.include_router(router)

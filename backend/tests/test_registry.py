@@ -9,9 +9,10 @@ from app.sources.registry import (
 )
 
 
-def test_default_registry_exposes_mangadex() -> None:
-    registry = default_registry()
-    assert registry.get("mangadex").info.name == "MangaDex"
+def test_mangadex_is_not_registered() -> None:
+    # MD@Home recusa pedido vindo do site; as obras nao abriam no navegador.
+    with pytest.raises(UnknownSourceError):
+        default_registry().get("mangadex")
 
 
 def test_registry_raises_for_unknown_source() -> None:

@@ -2,7 +2,6 @@ from app.sources.base import SourceAdapter
 from app.sources.blogger import BLOGGER_SITES, BloggerSource
 from app.sources.dropescan import DropeScanSource
 from app.sources.madara import MadaraSource
-from app.sources.mangadex import MangaDexSource
 from app.sources.mangaflix import MangaFlixSource
 from app.sources.mangalivre import MangaLivreSource
 from app.sources.mangalivreblog import MangaLivreBlogSource
@@ -34,6 +33,9 @@ class SourceRegistry:
 # de capitulos vindo pelo AJAX do tema. Sao scans pequenas: domino e markup
 # mudam sem aviso, por isso `risk="high"`.
 # Fora do registro (verificado em 24/11/2026):
+# - MangaDex: o MD@Home responde 404 a pedido vindo do site (origem ou Referer
+#   do github.io) e as capas ficam atras de desafio anti-bot. Como o app e
+#   usado pelo navegador, as obras nao abriam.
 # - leituramanga.net: a rota de capitulos responde 429 com espera de 15 min ja
 #   no primeiro pedido, mesmo com o limite geral sobrando. Sem capitulos, a
 #   busca so mostraria obras que nao abrem.
@@ -74,7 +76,6 @@ PTBR_MADARA_SOURCES = (
 
 def default_registry() -> SourceRegistry:
     registry = SourceRegistry()
-    registry.register(MangaDexSource())
     registry.register(MangaLivreSource())
     registry.register(MangaLivreBlogSource())
     registry.register(MangaFlixSource())

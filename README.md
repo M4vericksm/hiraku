@@ -46,7 +46,6 @@ As fontes são adapters isolados, um módulo por fonte, atrás do contrato
 
 | Fonte                                                          | Acesso                      |
 | -------------------------------------------------------------- | --------------------------- |
-| MangaDex                                                       | API pública                 |
 | MangaFlix                                                      | API pública                 |
 | Drope Scan                                                     | API pública                 |
 | MangaLivre                                                     | Scraping HTML               |
@@ -62,10 +61,8 @@ Fontes que bloqueiam acesso automatizado (403, desafio da Cloudflare ou
 anti-bot da hospedagem) ou que exigem login/VIP para ler ficam de fora: o
 Hiraku não contorna essas proteções.
 
-As capas do MangaDex não carregam fora do site deles: o `uploads.mangadex.org`
-responde com um desafio anti-bot quando o pedido vem de outro site. Os cards
-dessas obras mostram a capa tipográfica; as páginas dos capítulos carregam
-normalmente. Por isso os destaques do catálogo usam MangaLivre e MangaLivre.blog.
+O MangaDex ficou de fora: o servidor de imagens dele recusa pedidos vindos do
+site (regra anti-hotlink), então as obras não abriam no navegador.
 
 ## Proxy de imagens
 
@@ -78,7 +75,7 @@ Por isso o backend expõe `GET /image?url=…`, que:
 - limita a resposta a 20 MB.
 
 O `CatalogService` reescreve para o proxy **apenas** as URLs que precisam — o
-MangaDex já envia CORS, então suas imagens seguem diretas, sem salto extra.
+MangaFlix já envia CORS, então suas imagens seguem diretas, sem salto extra.
 
 ## Estrutura
 
@@ -95,7 +92,6 @@ backend/
 │       ├── base.py          # contrato SourceAdapter
 │       ├── registry.py      # registro de fontes
 │       ├── normalization.py # capitulos, titulos e ordenacao
-│       ├── mangadex.py
 │       └── mangalivre.py
 └── tests/
 
@@ -130,7 +126,7 @@ src/
 
 ```bash
 npm install
-pip install -r backend/requirements.txt
+pip install -r backend/requirements-dev.txt
 
 # Frontend (5173) e backend (8000) juntos
 npm run dev:all

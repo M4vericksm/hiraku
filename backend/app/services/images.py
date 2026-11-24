@@ -6,12 +6,14 @@ download offline le os bytes da pagina. O proxy resolve isso servindo a imagem
 a partir do nosso proprio dominio, com o Referer que a fonte espera.
 """
 
+import asyncio
+import ipaddress
+import socket
 from urllib.parse import quote, urljoin, urlparse
 
 import httpx
 
 ALLOWED_HOSTS = {
-    "uploads.mangadex.org",
     "mangalivre.to",
     "www.mangalivre.to",
     "mangalivre.blog",
@@ -32,8 +34,6 @@ ALLOWED_HOSTS = {
 }
 
 ALLOWED_HOST_SUFFIXES = (
-    ".mangadex.network",
-    ".mangadex.org",
     ".mangalivre.to",
     ".mangalivre.blog",
     ".xn--c5wx58dnej.online",
@@ -71,17 +71,10 @@ MAX_IMAGE_BYTES = 20 * 1024 * 1024
 # `is_allowed`. Um teto baixo evita cadeia infinita.
 MAX_REDIRECTS = 5
 
-# Hosts que respondem com Access-Control-Allow-Origin. Imagens desses hosts
-# podem ir direto para o navegador; as demais precisam passar pelo proxy para
-# que o download offline (fetch + blob) nao seja bloqueado.
-#
-# As capas (uploads.mangadex.org) seguem diretas, mas hoje o MangaDex responde
-# com desafio anti-bot ("Bot challenge not passed") a pedidos vindos de outro
-# site, e o card cai na capa tipografica. Pelo proxy tambem nao da: o IP do
-# servidor recebe o mesmo desafio (/edge/challenge). Nao contornamos isso.
+# Hosts que respondem com `Access-Control-Allow-Origin: *` para qualquer
+# imagem. Esses vao direto para o navegador; o resto passa pelo proxy para que
+# o download offline (fetch + blob) funcione.
 CORS_SAFE_HOST_SUFFIXES = (
-    "uploads.mangadex.org",
-    ".mangadex.network",
     # MangaFlix serve capas e paginas com `Access-Control-Allow-Origin: *`.
     ".mangaflix.net",
 )
@@ -118,6 +111,36 @@ def sniff_image_type(head: bytes) -> str | None:
     if head[4:12] in (b"ftypavif", b"ftypavis"):
         return "image/avif"
     return None
+
+
+# SVG e XML com script: servido no nosso dominio, viraria XSS. Pagina de
+# manga nunca e SVG.
+_BLOCKED_IMAGE_TYPES = ("image/svg", "image/svg+xml")
+
+
+async def resolve_ips(host: str) -> list[str]:
+    """IPs para onde o host aponta (separado para os testes substituirem)."""
+    loop = asyncio.get_running_loop()
+    infos = await loop.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    return [info[4][0] for info in infos]
+
+
+async def ensure_public_host(host: str) -> None:
+    """Recusa host que resolve para rede interna, loopback, link-local etc.
+
+    A allowlist confere o nome, mas um dominio de scan pode passar a apontar
+    para 127.0.0.1 ou para a rede do Docker (onde esta o Amparo). Sem esta
+    checagem o proxy iria ate la.
+    """
+    try:
+        addresses = await resolve_ips(host)
+    except OSError as exc:
+        raise ImageProxyError(f"Host nao resolve: {host}") from exc
+    if not addresses:
+        raise ImageProxyError(f"Host nao resolve: {host}")
+    for address in addresses:
+        if not ipaddress.ip_address(address.split("%", 1)[0]).is_global:
+            raise ImageProxyError(f"Host aponta para rede interna: {host}")
 
 
 class ImageProxyError(ValueError):
@@ -176,6 +199,7 @@ async def fetch_image(
     for _ in range(MAX_REDIRECTS + 1):
         if not is_allowed(current):
             raise ImageProxyError(f"Host nao permitido: {current}")
+        await ensure_public_host(urlparse(current).hostname or "")
 
         build_kwargs = {} if timeout is None else {"timeout": timeout}
         request = client.build_request(
@@ -194,6 +218,8 @@ async def fetch_image(
             response.raise_for_status()
 
             declared_type = response.headers.get("content-type", "")
+            if declared_type.lower().startswith(_BLOCKED_IMAGE_TYPES):
+                raise ImageProxyError("SVG nao e aceito pelo proxy")
             content_type = declared_type if declared_type.startswith("image/") else None
             if content_type is None and declared_type and not declared_type.startswith(
                 _SNIFFABLE_TYPES
