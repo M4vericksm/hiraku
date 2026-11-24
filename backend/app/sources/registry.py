@@ -1,4 +1,5 @@
 from app.sources.base import SourceAdapter
+from app.sources.blogger import BLOGGER_SITES, BloggerSource
 from app.sources.dropescan import DropeScanSource
 from app.sources.madara import MadaraSource
 from app.sources.mangadex import MangaDexSource
@@ -33,6 +34,9 @@ class SourceRegistry:
 # de capitulos vindo pelo AJAX do tema. Sao scans pequenas: domino e markup
 # mudam sem aviso, por isso `risk="high"`.
 # Fora do registro (verificado em 24/11/2026):
+# - leituramanga.net: a rota de capitulos responde 429 com espera de 15 min ja
+#   no primeiro pedido, mesmo com o limite geral sobrando. Sem capitulos, a
+#   busca so mostraria obras que nao abrem.
 # - leitor.kamisama.com.br virou pagina "Em breve", sem catalogo.
 # - ghostscan.xyz nao resolve mais em DNS.
 # - ninjacomics.xyz e hanamiheaven.org ficaram atras do anti-bot da Hostinger,
@@ -75,6 +79,8 @@ def default_registry() -> SourceRegistry:
     registry.register(MangaLivreBlogSource())
     registry.register(MangaFlixSource())
     registry.register(DropeScanSource())
+    for site in BLOGGER_SITES:
+        registry.register(BloggerSource(site))
     for source_def in PTBR_MADARA_SOURCES:
         source_id, name, base_url = source_def[:3]
         # A 4a posicao so aparece em quem nao serve as obras sob /manga/

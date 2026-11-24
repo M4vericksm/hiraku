@@ -44,18 +44,19 @@ https://hiraku-api.yoopix.com.br (API).
 As fontes são adapters isolados, um módulo por fonte, atrás do contrato
 `SourceAdapter`. Adicionar uma fonte não exige tocar no resto do sistema.
 
-| Fonte           | Acesso                      |
-| --------------- | --------------------------- |
-| MangaDex        | API pública                 |
-| MangaFlix       | API pública                 |
-| Drope Scan      | API pública                 |
-| MangaLivre      | Scraping HTML               |
-| MangaLivre.blog | API do WordPress + HTML     |
-| Monte Tai       | Scraping HTML (tema Madara) |
-| Arthur Scan     | Scraping HTML (tema Madara) |
-| Euphoria Scan   | Scraping HTML (tema Madara) |
-| Fleur Blanche   | Scraping HTML (tema Madara) |
-| Inka PK         | Scraping HTML (tema Madara) |
+| Fonte                                                          | Acesso                      |
+| -------------------------------------------------------------- | --------------------------- |
+| MangaDex                                                       | API pública                 |
+| MangaFlix                                                      | API pública                 |
+| Drope Scan                                                     | API pública                 |
+| MangaLivre                                                     | Scraping HTML               |
+| MangaLivre.blog                                                | API do WordPress + HTML     |
+| Monte Tai                                                      | Scraping HTML (tema Madara) |
+| Arthur Scan                                                    | Scraping HTML (tema Madara) |
+| Euphoria Scan                                                  | Scraping HTML (tema Madara) |
+| Fleur Blanche                                                  | Scraping HTML (tema Madara) |
+| Inka PK                                                        | Scraping HTML (tema Madara) |
+| Pink Rosa, Apenas Uma Fã, Ler 999, Hanmokku, Traduções do Lipe | Feed JSON do Blogger        |
 
 Fontes que bloqueiam acesso automatizado (403, desafio da Cloudflare ou
 anti-bot da hospedagem) ou que exigem login/VIP para ler ficam de fora: o

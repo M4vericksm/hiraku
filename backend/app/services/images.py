@@ -79,6 +79,9 @@ CORS_SAFE_HOST_SUFFIXES = (
     ".mangadex.network",
     # MangaFlix serve capas e paginas com `Access-Control-Allow-Origin: *`.
     ".mangaflix.net",
+    # Imagens dos blogs (Blogger) vem com `Access-Control-Allow-Origin: *`.
+    "blogger.googleusercontent.com",
+    ".bp.blogspot.com",
 )
 
 
