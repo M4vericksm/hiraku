@@ -7,15 +7,18 @@
 	import { onDestroy } from 'svelte';
 
 	// Obras Principais Canônicas para Exibição Inicial no Catálogo com IDs reais e representativas das principais fontes
+	// Destaques exibidos antes de qualquer busca. Todos apontam para fontes cujas
+	// capas carregam fora do proprio site (MangaLivre e MangaLivre.blog, pelo
+	// proxy /image). As capas do MangaDex ficam atras de um desafio anti-bot
+	// quando pedidas de outro site, entao nao servem para a vitrine.
 	const featuredMangas: Manga[] = [
-		// --- MANGADEX (Top Global & PT-BR com IDs UUID canônicos) ---
 		{
-			id: '801513ba-a712-498c-8f57-cae55b38cc92',
-			source: 'mangadex',
+			id: 'berserk',
+			source: 'mangalivre',
 			title: 'Berserk',
 			author: 'Kentarou Miura',
 			coverUrl:
-				'https://uploads.mangadex.org/covers/801513ba-a712-498c-8f57-cae55b38cc92/81e1c82d-6672-400c-8c58-4ff9bfb89031.jpg.256.jpg',
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FBerserk-193x278.webp',
 			description:
 				'Guts, um ex-mercenário agora conhecido como o Espadachim Negro, busca vingança contra a Mão de Deus e os Apóstolos.',
 			progress: 0,
@@ -25,12 +28,12 @@
 			genres: ['seinen', 'action', 'supernatural', 'drama', 'horror']
 		},
 		{
-			id: 'a1c7c817-4e59-43b7-9365-09675a149a6f',
-			source: 'mangadex',
+			id: 'one-piece-ptbr',
+			source: 'mangalivre',
 			title: 'One Piece',
 			author: 'Eiichiro Oda',
 			coverUrl:
-				'https://uploads.mangadex.org/covers/a1c7c817-4e59-43b7-9365-09675a149a6f/2f4aca53-64c7-46ac-ae85-3bc9b3169890.png.256.jpg',
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FOne-Piece-Manga-Livre-193x278.webp',
 			description:
 				'Monkey D. Luffy navega pelos mares com sua tripulação em busca do lendário tesouro One Piece para se tornar o Rei dos Piratas.',
 			progress: 0,
@@ -40,12 +43,12 @@
 			genres: ['shonen', 'action', 'adventure', 'fantasy', 'comedy']
 		},
 		{
-			id: 'a77742b1-befd-49a4-bff5-1ad4e6b0ef7b',
-			source: 'mangadex',
+			id: 'chainsaw-man-pt-br',
+			source: 'mangalivre',
 			title: 'Chainsaw Man',
 			author: 'Tatsuki Fujimoto',
 			coverUrl:
-				'https://uploads.mangadex.org/covers/a77742b1-befd-49a4-bff5-1ad4e6b0ef7b/6e518bd1-5f60-446b-8832-bfe6bf74834b.jpg.256.jpg',
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FChainsaw-Man-193x278.webp',
 			description:
 				'Denji se funde ao demônio da motosserra Pochita e se junta à Segurança Pública como caçador de demônios.',
 			progress: 0,
@@ -55,12 +58,12 @@
 			genres: ['shonen', 'action', 'supernatural', 'horror', 'demons']
 		},
 		{
-			id: 'd1a9fdeb-f713-407f-960c-8326b586e6fd',
-			source: 'mangadex',
+			id: 'vagabond',
+			source: 'mangalivreblog',
 			title: 'Vagabond',
 			author: 'Takehiko Inoue',
 			coverUrl:
-				'https://uploads.mangadex.org/covers/d1a9fdeb-f713-407f-960c-8326b586e6fd/05f8dcb4-8ea1-48db-a0b1-3a8fbf695e5a.jpg.256.jpg',
+				'/image?url=https%3A%2F%2Flivre.xn--c5wx58dnej.online%2Fmui%2Fslimeread%2F536433%2Fcover-001-f669889f60.jpg',
 			description:
 				'A jornada existencial e brutal de Shinmen Takezou para se tornar o lendário mestre espadachim Miyamoto Musashi.',
 			progress: 0,
@@ -70,12 +73,12 @@
 			genres: ['seinen', 'action', 'historical', 'drama', 'martial-arts']
 		},
 		{
-			id: '5d1fc77e-706a-4fc5-bea8-486c9be0145d',
-			source: 'mangadex',
+			id: 'vinland-saga',
+			source: 'mangalivreblog',
 			title: 'Vinland Saga',
 			author: 'Makoto Yukimura',
 			coverUrl:
-				'https://uploads.mangadex.org/covers/5d1fc77e-706a-4fc5-bea8-486c9be0145d/7fa60f5d-285a-40c5-8a1d-9cf375eaf897.jpg.256.jpg',
+				'/image?url=https%3A%2F%2Flivre.xn--c5wx58dnej.online%2Fmui%2Fslimeread%2F536973%2Fcover-001-b9378903ad.jpg',
 			description:
 				'Thorfinn, filho de um lendário guerreiro viking, busca vingança contra o assassino de seu pai em uma Europa em guerra.',
 			progress: 0,
@@ -85,27 +88,12 @@
 			genres: ['seinen', 'action', 'historical', 'adventure', 'drama']
 		},
 		{
-			id: '4301d363-ee02-43f4-ae24-4cbf29a74830',
-			source: 'mangadex',
-			title: 'Oyasumi Punpun',
-			author: 'Inio Asano',
-			coverUrl:
-				'https://uploads.mangadex.org/covers/4301d363-ee02-43f4-ae24-4cbf29a74830/0295431e-ccb9-4599-900f-0a1bc7380561.jpg.256.jpg',
-			description:
-				'O crescimento realista, melancólico e complexo de Punpun Onodera ao longo de sua infância, adolescência e vida adulta.',
-			progress: 0,
-			lastReadPage: 0,
-			totalPage: 0,
-			addedAt: new Date().toISOString(),
-			genres: ['seinen', 'psychological', 'slice-of-life', 'drama']
-		},
-		{
-			id: 'c52b2ce3-7f95-469c-96b0-474fb7624218',
-			source: 'mangadex',
+			id: 'jujutsu-kaisen-ptbr',
+			source: 'mangalivre',
 			title: 'Jujutsu Kaisen',
 			author: 'Gege Akutami',
 			coverUrl:
-				'https://uploads.mangadex.org/covers/c52b2ce3-7f95-469c-96b0-474fb7624218/1e93893d-4c3e-4869-9032-6bf59942a7fa.jpg.256.jpg',
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FJujutsu-Kaisen-193x278.webp',
 			description:
 				'Yuji Itadori engole um dedo amaldiçoado e passa a combater maldições ancestrais na Escola Técnica de Feitiçaria de Tóquio.',
 			progress: 0,
@@ -115,12 +103,12 @@
 			genres: ['shonen', 'action', 'supernatural', 'demons']
 		},
 		{
-			id: 'e78a489b-6632-4d61-b069-52341857f290',
-			source: 'mangadex',
+			id: 'sousou-no-frieren',
+			source: 'mangalivreblog',
 			title: 'Frieren: Beyond Journey\x27s End',
 			author: 'Kanehito Yamada, Tsukasa Abe',
 			coverUrl:
-				'https://uploads.mangadex.org/covers/e78a489b-6632-4d61-b069-52341857f290/a6e9a6e1-bf00-4b35-8664-888913ae6d22.jpg.256.jpg',
+				'/image?url=https%3A%2F%2Fmangalivre.blog%2Fwp-content%2Fuploads%2F2026%2F10%2Fcover-001-fe8e03b3.jpg',
 			description:
 				'A maga elfa Frieren trilha os caminhos do passado após a morte do herói Himmel, descobrindo o valor dos laços humanos.',
 			progress: 0,
@@ -129,8 +117,6 @@
 			addedAt: new Date().toISOString(),
 			genres: ['shonen', 'fantasy', 'adventure', 'drama', 'slice-of-life']
 		},
-
-		// --- MANGALIVRE & MADARA SCANS PT-BR (Top Clássicos e Webtoons mais lidos) ---
 		{
 			id: 'solo-leveling',
 			source: 'mangalivre',
@@ -167,7 +153,7 @@
 			title: 'Hunter x Hunter',
 			author: 'Yoshihiro Togashi',
 			coverUrl:
-				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FHunter-x-Hunter-193x278.webp',
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FHUNTER-x-HUNTER-193x278.webp',
 			description:
 				'Gon Freecss almeja se tornar um Hunter de elite para desvendar os mistérios do mundo e reencontrar seu pai Ging.',
 			progress: 0,
@@ -178,11 +164,11 @@
 		},
 		{
 			id: 'fullmetal-alchemist',
-			source: 'mangalivre',
+			source: 'mangalivreblog',
 			title: 'Fullmetal Alchemist',
 			author: 'Hiromu Arakawa',
 			coverUrl:
-				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FFullmetal-Alchemist-193x278.webp',
+				'/image?url=https%3A%2F%2Flivre.xn--c5wx58dnej.online%2Fmui%2Fslimeread%2F560762%2Fcover-001-2ec070e4ba.jpg',
 			description:
 				'Edward e Alphonse Elric buscam a lendária Pedra Filosofal para recuperar seus corpos após uma transmutação humana proibida.',
 			progress: 0,
@@ -192,12 +178,12 @@
 			genres: ['shonen', 'action', 'adventure', 'fantasy', 'drama']
 		},
 		{
-			id: 'the-beginning-after-the-end',
+			id: 'the-beginning-after-the-end-ptbr',
 			source: 'mangalivre',
 			title: 'The Beginning After The End',
 			author: 'TurtleMe',
 			coverUrl:
-				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FThe-Beginning-After-The-End-193x278.webp',
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FThe-Beginning-After-The-End-1-193x278.webp',
 			description:
 				'O Rei Grey renasce como Arthur Leywin em Dicathen, um mundo repleto de magia onde deverá proteger aqueles que ama de perigos iminentes.',
 			progress: 0,
@@ -207,12 +193,12 @@
 			genres: ['action', 'adventure', 'fantasy', 'isekai']
 		},
 		{
-			id: 'tower-of-god',
-			source: 'mangalivre',
+			id: 'tower-of-god-season-3',
+			source: 'mangalivreblog',
 			title: 'Tower of God',
 			author: 'SIU',
 			coverUrl:
-				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FTower-of-God-193x278.webp',
+				'/image?url=https%3A%2F%2Flivre.xn--c5wx58dnej.online%2Fmui%2Fslimeread%2F534324%2Fcover-001-759a37e780.jpg',
 			description:
 				'Vigésimo Quinto Bam entra na imensa Torre de Deus para reencontrar Rachel, enfrentando testes desafiadores em cada andar.',
 			progress: 0,
@@ -222,12 +208,12 @@
 			genres: ['action', 'adventure', 'fantasy', 'mystery']
 		},
 		{
-			id: 'omniscient-readers-viewpoint',
+			id: 'omniscient-reader',
 			source: 'mangalivre',
 			title: 'Omniscient Reader\x27s Viewpoint',
 			author: 'Sing Shong',
 			coverUrl:
-				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FOmniscient-Readers-Viewpoint-193x278.webp',
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2026%2F03%2FOmniscient-Reader-193x278.webp',
 			description:
 				'Kim Dokja era o único leitor de uma webnovel desconhecida. Quando o enredo vira realidade apocalíptica, ele é o único que sabe o final.',
 			progress: 0,
@@ -237,12 +223,12 @@
 			genres: ['action', 'fantasy', 'supernatural', 'adventure']
 		},
 		{
-			id: 'nano-machine',
+			id: 'nano-machine-ptbr',
 			source: 'mangalivre',
 			title: 'Nano Machine',
 			author: 'Han-joong-wueol-ya',
 			coverUrl:
-				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F07%2FNano-Machine-193x278.webp',
+				'/image?url=https%3A%2F%2Fmangalivre.to%2Fwp-content%2Fuploads%2F2025%2F10%2FNano-Machine-Nanotecnologia-Marcial-193x278.webp',
 			description:
 				'Cheon Yeo-Woon recebe do seu descendente do futuro uma injeção de nanomáquinas que transforma seu corpo no Culto Demoníaco.',
 			progress: 0,
