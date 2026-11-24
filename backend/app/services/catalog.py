@@ -12,6 +12,10 @@ from app.sources.registry import SourceRegistry, default_registry
 T = TypeVar("T")
 
 MIN_PER_SOURCE = 12
+# Teto de buscas em fontes rodando ao mesmo tempo, somando todos os clientes.
+# Cada busca agregada abre uma por fonte; sem teto, muitos IPs juntos faziam
+# a VM disparar centenas de pedidos de uma vez (e martelar as scans).
+MAX_PARALLEL_SOURCE_SEARCHES = 40
 MAX_CACHE_ITEMS = 5000
 SEARCH_SOURCE_TIMEOUT_SECONDS = 8
 
@@ -40,6 +44,17 @@ class MemoryTtlCache:
                     del self._items[stale]
         self._items[key] = (now + self.ttl_seconds, value)
         return value
+
+
+_search_slots: asyncio.Semaphore | None = None
+
+
+async def _bounded(coro: Awaitable[T]) -> T:
+    global _search_slots
+    if _search_slots is None:
+        _search_slots = asyncio.Semaphore(MAX_PARALLEL_SOURCE_SEARCHES)
+    async with _search_slots:
+        return await coro
 
 
 def _proxied(url: str | None) -> str | None:
@@ -81,7 +96,9 @@ class CatalogService:
         async def _one(adapter) -> list[MangaSearchResult]:
             key = f"search:{adapter.info.id}:{query.strip().lower()}:{per_source}"
             try:
-                lookup = self.cache.get_or_set(key, lambda a=adapter: a.search(query, per_source))
+                lookup = self.cache.get_or_set(
+                    key, lambda a=adapter: _bounded(a.search(query, per_source))
+                )
                 if source_id:
                     return await lookup
                 # Em multi-fonte uma fonte lenta nao segura a resposta das outras.

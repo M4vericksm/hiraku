@@ -126,3 +126,105 @@ def test_docs_can_be_disabled(monkeypatch):
         assert client.get("/docs").status_code == 404
         assert client.get("/openapi.json").status_code == 404
         assert client.get("/health").status_code == 200
+
+
+# ---------- segunda revisao ----------
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/manga/pinkrosa/..%2F..%2Fadmin",
+        "/manga/montetai/obra%20com%20espaco",
+        "/manga/MontéTai/obra",
+        "/manga/montetai/" + "a" * 301,
+        "/manga/montetai/x;rm/chapters",
+        "/chapters/montetai/a%3Fb%3Dc/pages",
+    ],
+)
+def test_suspicious_ids_are_404_before_any_upstream_call(monkeypatch, path):
+    from app.services.catalog import CatalogService
+
+    async def boom(*args, **kwargs):
+        raise AssertionError("nao devia chegar na fonte")
+
+    for name in ("detail", "chapters", "pages"):
+        monkeypatch.setattr(CatalogService, name, boom)
+    with TestClient(app) as client:
+        assert client.get(path).status_code == 404
+
+
+def test_real_looking_ids_still_reach_the_service(monkeypatch):
+    from app.domain.schemas import ChapterPages
+    from app.services.catalog import CatalogService
+
+    async def pages(self, source, chapter_id, data_saver=False):
+        return ChapterPages(source=source, source_chapter_id=chapter_id, page_urls=[])
+
+    monkeypatch.setattr(CatalogService, "pages", pages)
+    with TestClient(app) as client:
+        for chapter_id in (
+            "despertei-um-talento___capitulo-1",
+            "2896698091458584335",
+            "6a206dafa3c6e878d063d143",
+            "obra-%e3%81%82___cap-10.5",
+            "coração-de-pêssego___capítulo-2",
+        ):
+            assert client.get(f"/chapters/montetai/{chapter_id}/pages").status_code == 200
+
+
+def test_search_query_has_a_max_length():
+    with TestClient(app) as client:
+        assert client.get("/manga/search", params={"q": "x" * 101}).status_code == 422
+
+
+def test_ipv6_clients_share_the_limit_of_their_64():
+    from app.core.security import client_key
+
+    a = {"headers": [(b"cf-connecting-ip", b"2001:db8:1:2:aaaa::1")]}
+    b = {"headers": [(b"cf-connecting-ip", b"2001:db8:1:2:bbbb::9")]}
+    other = {"headers": [(b"cf-connecting-ip", b"2001:db8:1:3::1")]}
+    assert client_key(a) == client_key(b) == "2001:db8:1:2::/64"
+    assert client_key(other) != client_key(a)
+    assert client_key({"headers": [(b"cf-connecting-ip", b"203.0.113.9")]}) == "203.0.113.9"
+
+
+def test_image_byte_budget(monkeypatch):
+    monkeypatch.setattr(security, "IMAGE_BYTES_PER_MINUTE", 10)
+
+    async def fake_fetch(url, client, timeout=None):
+        return b"\xff\xd8\xff" + b"0" * 7, "image/jpeg"  # 10 bytes
+
+    monkeypatch.setattr("app.api.routes.fetch_image", fake_fetch)
+    with TestClient(create_app()) as client:
+        headers = {"CF-Connecting-IP": "198.51.100.20"}
+        params = {"url": "https://mangalivre.to/a.jpg"}
+        first = client.get("/image", params=params, headers=headers)
+        second = client.get("/image", params=params, headers=headers)
+        other_ip = client.get("/image", params=params, headers={"CF-Connecting-IP": "198.51.100.21"})
+    assert first.status_code == 200
+    assert second.status_code == 429 and second.headers["retry-after"]
+    assert other_ip.status_code == 200
+
+
+def test_source_searches_have_a_global_ceiling(monkeypatch):
+    import app.services.catalog as catalog_module
+
+    monkeypatch.setattr(catalog_module, "MAX_PARALLEL_SOURCE_SEARCHES", 2)
+    monkeypatch.setattr(catalog_module, "_search_slots", None)
+    running = 0
+    peak = 0
+
+    async def slow():
+        nonlocal running, peak
+        running += 1
+        peak = max(peak, running)
+        await asyncio.sleep(0.01)
+        running -= 1
+        return []
+
+    async def main():
+        await asyncio.gather(*[catalog_module._bounded(slow()) for _ in range(10)])
+
+    asyncio.run(main())
+    assert peak == 2
