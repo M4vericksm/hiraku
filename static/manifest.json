@@ -1,22 +1,25 @@
 {
   "name": "Hiraku",
   "short_name": "Hiraku",
-  "description": "Leitor de mangá local — rápido, privado e sem backend.",
-  "start_url": "/",
+  "description": "Leitor de mangá com leitura offline.",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#0d0d0d",
   "theme_color": "#0d0d0d",
   "orientation": "portrait-primary",
-  "categories": ["books", "entertainment"],
+  "categories": [
+    "books",
+    "entertainment"
+  ],
   "icons": [
     {
-      "src": "/icon-512.svg",
+      "src": "icon-512.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icon-512.svg",
+      "src": "icon-512.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "maskable"
@@ -26,13 +29,14 @@
   "shortcuts": [
     {
       "name": "Biblioteca",
-      "url": "/",
+      "url": "./",
       "description": "Ver sua biblioteca de mangás"
     },
     {
       "name": "Configurações",
-      "url": "/settings",
+      "url": "settings",
       "description": "Preferências e dados"
     }
-  ]
+  ],
+  "scope": "./"
 }
