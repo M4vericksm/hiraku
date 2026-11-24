@@ -27,7 +27,6 @@ class Settings:
     rate_limit_enabled: bool = field(
         default_factory=lambda: os.getenv("HIRAKU_RATE_LIMIT", "1") != "0"
     )
-    mangadex_base_url: str = os.getenv("HIRAKU_MANGADEX_BASE_URL", "https://api.mangadex.org")
     cache_ttl_seconds: int = int(os.getenv("HIRAKU_CACHE_TTL_SECONDS", "300"))
     default_language: str = os.getenv("HIRAKU_DEFAULT_LANGUAGE", "pt-br")
 

@@ -8,8 +8,7 @@ downloads.
 
 ## Decisao inicial
 
-Comecamos com uma fonte real e relativamente estavel: MangaDex, usando a API
-publica em vez de scraping HTML. A arquitetura ja aceita multiplas fontes, mas
+As fontes ficam na tabela do README principal. A arquitetura ja aceita multiplas fontes, mas
 o sistema fica mais facil de validar com apenas uma no inicio.
 
 ## Estrutura
@@ -25,7 +24,6 @@ backend/
 │       ├── base.py               # contrato SourceAdapter
 │       ├── registry.py           # registro de fontes
 │       ├── normalization.py      # capitulos, titulos e ordenacao
-│       └── mangadex.py           # adapter inicial
 └── tests/
 ```
 

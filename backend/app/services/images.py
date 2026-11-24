@@ -14,7 +14,6 @@ from urllib.parse import quote, urljoin, urlparse
 import httpx
 
 ALLOWED_HOSTS = {
-    "uploads.mangadex.org",
     "mangalivre.to",
     "www.mangalivre.to",
     "mangalivre.blog",
@@ -35,8 +34,6 @@ ALLOWED_HOSTS = {
 }
 
 ALLOWED_HOST_SUFFIXES = (
-    ".mangadex.network",
-    ".mangadex.org",
     ".mangalivre.to",
     ".mangalivre.blog",
     ".xn--c5wx58dnej.online",
@@ -74,17 +71,10 @@ MAX_IMAGE_BYTES = 20 * 1024 * 1024
 # `is_allowed`. Um teto baixo evita cadeia infinita.
 MAX_REDIRECTS = 5
 
-# Hosts que respondem com Access-Control-Allow-Origin. Imagens desses hosts
-# podem ir direto para o navegador; as demais precisam passar pelo proxy para
-# que o download offline (fetch + blob) nao seja bloqueado.
-#
-# As capas (uploads.mangadex.org) seguem diretas, mas hoje o MangaDex responde
-# com desafio anti-bot ("Bot challenge not passed") a pedidos vindos de outro
-# site, e o card cai na capa tipografica. Pelo proxy tambem nao da: o IP do
-# servidor recebe o mesmo desafio (/edge/challenge). Nao contornamos isso.
+# Hosts que respondem com `Access-Control-Allow-Origin: *` para qualquer
+# imagem. Esses vao direto para o navegador; o resto passa pelo proxy para que
+# o download offline (fetch + blob) funcione.
 CORS_SAFE_HOST_SUFFIXES = (
-    "uploads.mangadex.org",
-    ".mangadex.network",
     # MangaFlix serve capas e paginas com `Access-Control-Allow-Origin: *`.
     ".mangaflix.net",
 )
