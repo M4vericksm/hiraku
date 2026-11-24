@@ -200,3 +200,36 @@ async def _too_many_requests(send: Send, wait: float) -> None:
         }
     )
     await send({"type": "http.response.body", "body": body})
+
+
+class PublicImageCorsMiddleware:
+    """`/image` responde `Access-Control-Allow-Origin: *`, sem `Vary: Origin`.
+
+    Imagem e publica e nunca usa credencial. Com o CORS padrao a resposta
+    levava a origem de quem pediu (site ou app); com cache na Cloudflare, que
+    nao separa por origem, a copia guardada para um quebraria o download no
+    outro. Fica por fora do CORSMiddleware para ter a ultima palavra.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope.get("path") != "/image":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_public(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                dropped = {b"access-control-allow-origin", b"access-control-allow-credentials"}
+                headers = [
+                    (name, value)
+                    for name, value in message.get("headers") or []
+                    if name.lower() not in dropped
+                    and not (name.lower() == b"vary" and value.lower() == b"origin")
+                ]
+                headers.append((b"access-control-allow-origin", b"*"))
+                message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, send_public)

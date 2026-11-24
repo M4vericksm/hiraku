@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes import router
 from app.core import http
 from app.core.config import settings
-from app.core.security import EdgeProtectionMiddleware
+from app.core.security import EdgeProtectionMiddleware, PublicImageCorsMiddleware
 from app.db.models import Base
 from app.db.session import engine
 from app.sources.base import SourceNotFoundError
@@ -46,6 +46,7 @@ def create_app() -> FastAPI:
         allow_methods=["GET"],
         allow_headers=["*"],
     )
+    app.add_middleware(PublicImageCorsMiddleware)
     app.include_router(router)
 
     @app.exception_handler(SourceNotFoundError)

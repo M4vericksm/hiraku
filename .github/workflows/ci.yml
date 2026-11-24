@@ -28,7 +28,7 @@ jobs:
       - run: python -m pytest -q
 
       # Falha o PR se alguma dependencia de producao tiver vulnerabilidade conhecida.
-      - run: pip-audit -r requirements.txt
+      - run: pip-audit -r requirements.txt --timeout 60
 
   frontend:
     runs-on: ubuntu-latest

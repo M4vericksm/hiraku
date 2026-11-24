@@ -228,3 +228,23 @@ def test_source_searches_have_a_global_ceiling(monkeypatch):
 
     asyncio.run(main())
     assert peak == 2
+
+
+def test_image_cors_is_public_so_edge_cache_is_safe(monkeypatch):
+    async def fake_fetch(url, client, timeout=None):
+        return b"\xff\xd8\xff", "image/jpeg"
+
+    monkeypatch.setattr("app.api.routes.fetch_image", fake_fetch)
+    with TestClient(app) as client:
+        responses = [
+            client.get("/image", params={"url": "https://mangalivre.to/a.jpg"}, headers={"Origin": o})
+            for o in ("http://localhost", "https://localhost", "https://evil.example")
+        ]
+        api = client.get("/sources", headers={"Origin": "http://localhost"})
+    for response in responses:
+        # Mesma resposta para qualquer origem: a copia em cache serve a todos.
+        assert response.headers["access-control-allow-origin"] == "*"
+        assert "origin" not in response.headers.get("vary", "").lower()
+        assert "access-control-allow-credentials" not in response.headers
+    # O resto da API continua restrito as origens do app.
+    assert api.headers["access-control-allow-origin"] == "http://localhost"
