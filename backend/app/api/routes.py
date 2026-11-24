@@ -17,6 +17,13 @@ def _source_unavailable(exc: Exception) -> HTTPException:
     return HTTPException(status_code=502, detail=f"Fonte indisponivel: {exc}")
 
 
+def _from_upstream_status(exc: httpx.HTTPStatusError, not_found: str) -> HTTPException:
+    """404 da fonte e "nao existe" (404); o resto e fonte com problema (502)."""
+    if exc.response.status_code == 404:
+        return HTTPException(status_code=404, detail=not_found)
+    return _source_unavailable(exc)
+
+
 @router.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -65,9 +72,7 @@ async def manga_detail(
     except UnknownSourceError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 404:
-            raise HTTPException(status_code=404, detail="Manga nao encontrado") from exc
-        raise _source_unavailable(exc) from exc
+        raise _from_upstream_status(exc, "Manga nao encontrado") from exc
     except httpx.HTTPError as exc:
         raise _source_unavailable(exc) from exc
 
@@ -83,6 +88,8 @@ async def manga_chapters(
         return await service.chapters(source, source_manga_id, language=language)
     except UnknownSourceError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        raise _from_upstream_status(exc, "Manga nao encontrado") from exc
     except httpx.HTTPError as exc:
         raise _source_unavailable(exc) from exc
 
@@ -98,6 +105,8 @@ async def chapter_pages(
         return await service.pages(source, source_chapter_id, data_saver=data_saver)
     except UnknownSourceError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        raise _from_upstream_status(exc, "Capitulo nao encontrado") from exc
     except httpx.HTTPError as exc:
         raise _source_unavailable(exc) from exc
 
