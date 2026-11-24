@@ -16,14 +16,9 @@ ALLOWED_HOSTS = {
     "www.mangalivre.to",
     "mangalivre.blog",
     "www.mangalivre.blog",
-    "leitor.kamisama.com.br",
     "montetaiscanlator.xyz",
-    "ninjacomics.xyz",
     "euphoriascan.com",
-    "fbsquadx.com",
-    "ghostscan.xyz",
     "inkapk.net",
-    "hanamiheaven.org",
 }
 
 ALLOWED_HOST_SUFFIXES = (
@@ -31,30 +26,22 @@ ALLOWED_HOST_SUFFIXES = (
     ".mangadex.org",
     ".mangalivre.to",
     ".mangalivre.blog",
+    ".xn--c5wx58dnej.online",
     # Os sites Madara servem parte das paginas por uma CDN em subdominio
     # (ex.: cdn.montetaiscanlator.xyz), entao o sufixo tem que entrar junto.
-    ".kamisama.com.br",
     ".montetaiscanlator.xyz",
-    ".ninjacomics.xyz",
     ".euphoriascan.com",
-    ".fbsquadx.com",
-    ".ghostscan.xyz",
     ".inkapk.net",
-    ".hanamiheaven.org",
 )
 
 # Sites Madara checam Referer nas imagens de capitulo; sem ele vem 403.
 REFERERS = {
     "mangalivre.to": "https://mangalivre.to/",
     "mangalivre.blog": "https://mangalivre.blog/",
-    "kamisama.com.br": "https://leitor.kamisama.com.br/",
+    "xn--c5wx58dnej.online": "https://mangalivre.blog/",
     "montetaiscanlator.xyz": "https://montetaiscanlator.xyz/",
-    "ninjacomics.xyz": "https://ninjacomics.xyz/",
     "euphoriascan.com": "https://euphoriascan.com/",
-    "fbsquadx.com": "https://fbsquadx.com/",
-    "ghostscan.xyz": "https://ghostscan.xyz/",
     "inkapk.net": "https://inkapk.net/",
-    "hanamiheaven.org": "https://hanamiheaven.org/",
 }
 
 BROWSER_USER_AGENT = (
@@ -71,6 +58,11 @@ MAX_REDIRECTS = 5
 # Hosts que respondem com Access-Control-Allow-Origin. Imagens desses hosts
 # podem ir direto para o navegador; as demais precisam passar pelo proxy para
 # que o download offline (fetch + blob) nao seja bloqueado.
+#
+# As capas (uploads.mangadex.org) seguem diretas, mas hoje o MangaDex responde
+# com desafio anti-bot ("Bot challenge not passed") a pedidos vindos de outro
+# site, e o card cai na capa tipografica. Pelo proxy tambem nao da: o IP do
+# servidor recebe o mesmo desafio (/edge/challenge). Nao contornamos isso.
 CORS_SAFE_HOST_SUFFIXES = (
     "uploads.mangadex.org",
     ".mangadex.network",
@@ -88,6 +80,26 @@ def needs_proxy(url: str) -> bool:
 def proxy_url(url: str) -> str:
     """Reescreve a URL da fonte para o nosso endpoint de proxy."""
     return f"/image?url={quote(url, safe='')}"
+
+
+# Tipos genericos que algumas CDNs usam para imagem. So nesses casos (ou sem
+# content-type) o proxy confere a assinatura; HTML ou JSON sao recusados direto.
+_SNIFFABLE_TYPES = ("application/octet-stream", "binary/octet-stream")
+
+
+def sniff_image_type(head: bytes) -> str | None:
+    """Reconhece o formato pela assinatura (magic bytes) dos primeiros bytes."""
+    if head.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp"
+    if head.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if head[4:12] in (b"ftypavif", b"ftypavis"):
+        return "image/avif"
+    return None
 
 
 class ImageProxyError(ValueError):
@@ -163,9 +175,12 @@ async def fetch_image(
 
             response.raise_for_status()
 
-            content_type = response.headers.get("content-type", "image/jpeg")
-            if not content_type.startswith("image/"):
-                raise ImageProxyError(f"Resposta nao e uma imagem: {content_type}")
+            declared_type = response.headers.get("content-type", "")
+            content_type = declared_type if declared_type.startswith("image/") else None
+            if content_type is None and declared_type and not declared_type.startswith(
+                _SNIFFABLE_TYPES
+            ):
+                raise ImageProxyError(f"Resposta nao e uma imagem: {declared_type}")
 
             declared = response.headers.get("content-length")
             if declared and declared.isdigit() and int(declared) > MAX_IMAGE_BYTES:
@@ -176,6 +191,14 @@ async def fetch_image(
                 buffer.extend(chunk)
                 if len(buffer) > MAX_IMAGE_BYTES:
                     raise ImageProxyError("Imagem excede o tamanho maximo permitido")
+
+            if content_type is None:
+                # CDNs como a da Monte Tai servem .webp como octet-stream. Em vez
+                # de recusar, olhamos a assinatura do arquivo; se nao for imagem
+                # conhecida, a resposta continua recusada.
+                content_type = sniff_image_type(bytes(buffer[:16]))
+                if content_type is None:
+                    raise ImageProxyError(f"Resposta nao e uma imagem: {declared_type}")
 
             return bytes(buffer), content_type
         finally:

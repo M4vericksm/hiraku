@@ -32,6 +32,11 @@ jobs:
           BASE_PATH: /hiraku
           VITE_API_BASE: https://hiraku-api.yoopix.com.br
 
+      # O adapter usa fallback index.html (o APK precisa dele). O Pages so
+      # cai no fallback se existir 404.html; sem ele, abrir /hiraku/catalog
+      # direto ou dar refresh em qualquer rota dava o 404 do GitHub.
+      - run: cp build/index.html build/404.html
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/

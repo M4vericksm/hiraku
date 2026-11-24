@@ -24,6 +24,7 @@ unico no site. Ainda assim o `source_id` carrega os dois lados separados por
 (e os favoritos ja salvos) nao precisar saber a diferenca.
 """
 
+import asyncio
 import html
 import re
 
@@ -93,7 +94,26 @@ class MangaLivreBlogSource:
                 )
             )
 
-        return sorted(results, key=lambda item: item.score, reverse=True)[:limit]
+        ranked = sorted(results, key=lambda item: item.score, reverse=True)[:limit]
+
+        # Cerca de 1 em 5 obras nao tem "imagem destacada" no WordPress: a capa
+        # so existe no HTML da obra. Sem isso o card aparecia vazio na busca.
+        missing = [item for item in ranked if not item.cover_url]
+        if missing:
+            covers = await asyncio.gather(
+                *[self._cover_from_page(item.source_id) for item in missing]
+            )
+            for item, cover in zip(missing, covers):
+                item.cover_url = cover
+
+        return ranked
+
+    async def _cover_from_page(self, manga_source_id: str) -> str | None:
+        try:
+            return (await self.detail(manga_source_id)).cover_url
+        except Exception:
+            # Capa e cosmetica: falhar aqui nao pode derrubar a busca.
+            return None
 
     async def detail(self, manga_source_id: str) -> MangaSearchResult:
         response = await get_client().get(
