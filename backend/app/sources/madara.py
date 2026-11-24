@@ -170,20 +170,29 @@ class MadaraSource:
             return []
 
         found: list[tuple[str, str, str]] = []
+        seen: set[str] = set()
 
-        # O tema envolve cada resultado nesse bloco; dividir por ele isola os
-        # campos de um item sem precisar casar a arvore de tags inteira.
-        for block in response.text.split('class="row c-tabs-item__content"')[1:]:
-            url_m = re.search(r'href="([^"]+)"', block)
-            title_m = re.search(r'title="([^"]+)"', block)
-            if not url_m or not title_m:
+        # O tema envolve cada resultado num bloco; dividir por ele isola os
+        # campos de um item sem precisar casar a arvore de tags inteira. Cada
+        # variante do Madara usa um bloco: lista classica, grade e o
+        # `manga__item` de temas-filho. Vale o primeiro que aparecer.
+        blocks: list[str] = []
+        for marker in _SEARCH_BLOCK_MARKERS:
+            blocks = response.text.split(marker)[1:]
+            if blocks:
+                break
+
+        for block in blocks:
+            slug = None
+            for href in re.findall(r'href="([^"]+)"', block):
+                slug = self._slug_from_url(href.strip())
+                if slug:
+                    break
+            title = _result_title(block)
+            if not slug or not title or slug in seen:
                 continue
-
-            slug = self._slug_from_url(url_m.group(1).strip())
-            if not slug:
-                continue
-
-            found.append((slug, html.unescape(title_m.group(1).strip()), block))
+            seen.add(slug)
+            found.append((slug, title, block))
 
         return found
 
@@ -381,6 +390,27 @@ def _image_url(attrs: str) -> str | None:
             url = match.group(1).strip()
             if url.startswith("http"):
                 return url
+    return None
+
+
+_SEARCH_BLOCK_MARKERS = (
+    'class="row c-tabs-item__content"',
+    'class="page-item-detail',
+    'class="manga__item',
+)
+
+
+def _result_title(block: str) -> str | None:
+    """Titulo do resultado: atributo `title` ou o texto do link do post-title."""
+    match = re.search(r'title="([^"]+)"', block)
+    if match:
+        return html.unescape(match.group(1).strip())
+    match = re.search(
+        r'class="post-title[^"]*"[^>]*>.*?<a[^>]*>\s*(.*?)\s*</a>', block, re.DOTALL
+    )
+    if match:
+        title = re.sub(r"<[^>]+>", "", match.group(1)).strip()
+        return html.unescape(title) or None
     return None
 
 

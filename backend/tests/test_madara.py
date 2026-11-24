@@ -6,6 +6,12 @@ extracao (lazyload em data-src, generos sem bloco genres-content, capitulos
 so via AJAX).
 """
 
+import asyncio
+
+import httpx
+import pytest
+
+import app.core.http as http_module
 from app.sources.madara import (
     MadaraSource,
     _chapter_label,
@@ -71,3 +77,42 @@ def test_slug_from_url_respeita_paths_alternativos() -> None:
     assert source._slug_from_url("https://exemplo.test/obra/minha-obra/") == "minha-obra"
     assert source._slug_from_url("https://exemplo.test/manga/outra/") == "outra"
     assert source._slug_from_url("https://exemplo.test/autor/fulano/") is None
+
+
+GRID_SEARCH_HTML = """
+<div class="page-listing-item"><div class="page-item-detail manga  ">
+  <div class="item-thumb c-image-hover">
+    <a href="https://flowermangas.net/manga/obra-um/" title="Obra Um">
+      <img src="https://flowermangas.net/wp-content/uploads/um.jpg" /></a>
+  </div>
+</div></div>
+"""
+
+MANGA_ITEM_SEARCH_HTML = """
+<div class="search-lists"><div class="manga__item ">
+  <div class="manga__thumb"><a href="https://arthurscan.xyz/manga/obra-dois/">
+    <img src="https://arthurscan.xyz/wp-content/uploads/dois.webp" /></a></div>
+  <div class="manga__content"><div class="post-title font-title"><h2>
+    <a href="https://arthurscan.xyz/manga/obra-dois/"> Obra &amp; Dois </a>
+  </h2></div></div>
+</div></div>
+"""
+
+
+@pytest.mark.parametrize(
+    ("markup", "slug", "title"),
+    [
+        (GRID_SEARCH_HTML, "obra-um", "Obra Um"),
+        (MANGA_ITEM_SEARCH_HTML, "obra-dois", "Obra & Dois"),
+    ],
+)
+def test_search_understands_grid_and_manga_item_layouts(monkeypatch, markup, slug, title):
+    # Variantes do Madara (Flower Mangas, Arthur Scan) nao usam o bloco
+    # `c-tabs-item__content`; sem isso a busca voltava sempre vazia.
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, text=markup))
+    )
+    monkeypatch.setattr(http_module, "_client", client)
+    source = MadaraSource(source_id="x", name="X", base_url="https://example.com")
+    found = asyncio.run(source._search_page("obra", 1))
+    assert [(item[0], item[1]) for item in found] == [(slug, title)]

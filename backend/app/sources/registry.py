@@ -1,6 +1,8 @@
 from app.sources.base import SourceAdapter
+from app.sources.dropescan import DropeScanSource
 from app.sources.madara import MadaraSource
 from app.sources.mangadex import MangaDexSource
+from app.sources.mangaflix import MangaFlixSource
 from app.sources.mangalivre import MangaLivreSource
 from app.sources.mangalivreblog import MangaLivreBlogSource
 
@@ -32,7 +34,7 @@ class SourceRegistry:
 # mudam sem aviso, por isso `risk="high"`.
 # Fora do registro (verificado em 24/11/2026):
 # - leitor.kamisama.com.br virou pagina "Em breve", sem catalogo.
-# - fbsquadx.com (Fleur Blanche) e ghostscan.xyz nao resolvem mais em DNS.
+# - ghostscan.xyz nao resolve mais em DNS.
 # - ninjacomics.xyz e hanamiheaven.org ficaram atras do anti-bot da Hostinger,
 #   que devolve 403 para requisicoes de servidor. Nao contornamos protecao
 #   anti-bot: se o site bloqueia, a fonte sai.
@@ -42,6 +44,9 @@ PTBR_MADARA_SOURCES = (
     # id, nome, base_url, manga_paths (opcional; default ("manga",))
     ("montetai", "Monte Tai", "https://montetaiscanlator.xyz"),
     ("euphoriascan", "Euphoria Scan", "https://euphoriascan.com"),
+    ("arthurscan", "Arthur Scan", "https://arthurscan.xyz"),
+    # Fleur Blanche voltou em dominio novo (o antigo, fbsquadx.com, caiu).
+    ("fleurblanche", "Fleur Blanche", "https://squadxfbs.com"),
     ("inkapk", "Inka PK", "https://inkapk.net", ("obras",)),
     # mangalivre.blog nao entra aqui: roda WordPress com tema proprio, nao
     # Madara. Tem adapter dedicado (`MangaLivreBlogSource`), registrado abaixo.
@@ -68,6 +73,8 @@ def default_registry() -> SourceRegistry:
     registry.register(MangaDexSource())
     registry.register(MangaLivreSource())
     registry.register(MangaLivreBlogSource())
+    registry.register(MangaFlixSource())
+    registry.register(DropeScanSource())
     for source_def in PTBR_MADARA_SOURCES:
         source_id, name, base_url = source_def[:3]
         # A 4a posicao so aparece em quem nao serve as obras sob /manga/
