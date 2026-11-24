@@ -17,7 +17,7 @@ jobs:
     env:
       API_BASE: ${{ github.event.inputs.api_base || vars.VITE_API_BASE || 'https://hiraku-api.yoopix.com.br' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
