@@ -102,6 +102,20 @@
 	const retriedPages = new Set<number>();
 	const failedPages = new SvelteSet<number>();
 
+	// Pagina de webtoon e uma tira muito alta. No modo paginado, caber na altura
+	// da tela a deixava uma faixa fina e ilegivel; essas ocupam a largura e
+	// rolam na vertical.
+	const TALL_PAGE_RATIO = 2.2;
+	const tallPages = new SvelteSet<number>();
+	let pagedScroller = $state<HTMLElement | null>(null);
+	const currentIsTall = $derived(tallPages.has(currentPage - 1));
+
+	function notePageSize(index: number, image: HTMLImageElement) {
+		if (image.naturalWidth > 0 && image.naturalHeight / image.naturalWidth > TALL_PAGE_RATIO) {
+			tallPages.add(index);
+		}
+	}
+
 	async function handlePageError(index: number) {
 		if (isOfflineSource || retriedPages.has(index)) {
 			failedPages.add(index);
@@ -123,6 +137,12 @@
 			if (token === loadToken) failedPages.add(index);
 		}
 	}
+
+	$effect(() => {
+		// Nova pagina comeca do topo (importa nas tiras altas, que rolam).
+		void currentPage;
+		untrack(() => pagedScroller?.scrollTo({ top: 0, left: 0 }));
+	});
 
 	function retryPage(index: number) {
 		retriedPages.delete(index);
@@ -150,6 +170,7 @@
 		preloadedPages.clear();
 		retriedPages.clear();
 		failedPages.clear();
+		tallPages.clear();
 	}
 
 	let loadToken = 0;
@@ -989,9 +1010,14 @@
 						esquerda no scroll).
 					-->
 					<div
+						bind:this={pagedScroller}
 						class={cn(
 							'relative flex h-full w-full overflow-auto',
-							zoomLevel > 1 ? 'items-start justify-start' : 'items-center justify-center'
+							zoomLevel > 1
+								? 'items-start justify-start'
+								: currentIsTall
+									? 'items-start justify-center'
+									: 'items-center justify-center'
 						)}
 					>
 						{#if pageUrls[currentPage - 1] && failedPages.has(currentPage - 1)}
@@ -1010,8 +1036,12 @@
 							<img
 								src={pageUrls[currentPage - 1]}
 								alt={`Página ${currentPage}`}
-								class="m-auto h-auto max-w-none object-contain"
-								style="width: {zoomLevel * 100}%; max-height: {zoomLevel === 1 ? '100%' : 'none'};"
+								class={cn('h-auto object-contain', currentIsTall ? 'mx-auto' : 'm-auto max-w-none')}
+								style="width: {zoomLevel * 100}%; max-height: {zoomLevel === 1 && !currentIsTall
+									? '100%'
+									: 'none'}; max-width: {currentIsTall && zoomLevel === 1 ? '760px' : 'none'};"
+								onload={(event) =>
+									notePageSize(currentPage - 1, event.currentTarget as HTMLImageElement)}
 								onerror={() => handlePageError(currentPage - 1)}
 							/>
 						{:else}
