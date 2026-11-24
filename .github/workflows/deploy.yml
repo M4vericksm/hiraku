@@ -37,7 +37,7 @@ jobs:
       # direto ou dar refresh em qualquer rota dava o 404 do GitHub.
       - run: cp build/index.html build/404.html
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: build/
 
