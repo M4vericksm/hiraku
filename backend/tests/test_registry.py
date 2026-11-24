@@ -71,7 +71,7 @@ def test_4th_field_overrides_manga_path() -> None:
 
 
 @pytest.mark.parametrize(
-    "source_id", ["kamisama", "ninjascan", "fleurblanche", "ghostscan", "hanamiheaven"]
+    "source_id", ["kamisama", "ninjascan", "ghostscan", "hanamiheaven"]
 )
 def test_broken_sources_are_not_registered(source_id: str) -> None:
     # Fora do ar, sem catalogo ou atras de anti-bot: so gastariam timeout.

@@ -143,3 +143,23 @@ def test_html_content_type_is_rejected_without_sniffing():
     client = _client_returning(WEBP_HEAD, "text/html")
     with pytest.raises(ImageProxyError):
         asyncio.run(fetch_image(url, client))
+
+
+@pytest.mark.parametrize(
+    ("url", "referer"),
+    [
+        ("https://bucket-1.dropescan.com/covers/a/b.webp", "https://beta.dropescan.com/"),
+        ("https://arthurscan.xyz/wp-content/uploads/a.webp", "https://arthurscan.xyz/"),
+        ("https://squadxfbs.com/wp-content/uploads/a.webp", "https://squadxfbs.com/"),
+    ],
+)
+def test_new_source_hosts_are_allowed(url, referer):
+    assert is_allowed(url)
+    assert needs_proxy(url)
+    assert referer_for(url) == referer
+
+
+def test_mangaflix_images_go_direct():
+    # static./cdn.mangaflix.net respondem com Access-Control-Allow-Origin: *.
+    assert not needs_proxy("https://cdn.mangaflix.net/abc.jpg")
+    assert not needs_proxy("https://static.mangaflix.net/up/x/optimized.jpg")

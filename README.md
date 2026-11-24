@@ -47,11 +47,19 @@ As fontes são adapters isolados, um módulo por fonte, atrás do contrato
 | Fonte           | Acesso                      |
 | --------------- | --------------------------- |
 | MangaDex        | API pública                 |
+| MangaFlix       | API pública                 |
+| Drope Scan      | API pública                 |
 | MangaLivre      | Scraping HTML               |
 | MangaLivre.blog | API do WordPress + HTML     |
 | Monte Tai       | Scraping HTML (tema Madara) |
+| Arthur Scan     | Scraping HTML (tema Madara) |
 | Euphoria Scan   | Scraping HTML (tema Madara) |
+| Fleur Blanche   | Scraping HTML (tema Madara) |
 | Inka PK         | Scraping HTML (tema Madara) |
+
+Fontes que bloqueiam acesso automatizado (403, desafio da Cloudflare ou
+anti-bot da hospedagem) ou que exigem login/VIP para ler ficam de fora: o
+Hiraku não contorna essas proteções.
 
 As capas do MangaDex não carregam fora do site deles: o `uploads.mangadex.org`
 responde com um desafio anti-bot quando o pedido vem de outro site. Os cards

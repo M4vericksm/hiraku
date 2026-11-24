@@ -18,7 +18,13 @@ ALLOWED_HOSTS = {
     "www.mangalivre.blog",
     "montetaiscanlator.xyz",
     "euphoriascan.com",
+    "arthurscan.xyz",
+    "squadxfbs.com",
     "inkapk.net",
+    # CDN de capas e paginas do mangalivre.blog (dominio IDN em punycode).
+    "livre.xn--c5wx58dnej.online",
+    # Capas e paginas da Drope Scan (sem CORS, passam pelo proxy).
+    "bucket-1.dropescan.com",
 }
 
 ALLOWED_HOST_SUFFIXES = (
@@ -31,6 +37,8 @@ ALLOWED_HOST_SUFFIXES = (
     # (ex.: cdn.montetaiscanlator.xyz), entao o sufixo tem que entrar junto.
     ".montetaiscanlator.xyz",
     ".euphoriascan.com",
+    ".arthurscan.xyz",
+    ".squadxfbs.com",
     ".inkapk.net",
 )
 
@@ -39,8 +47,11 @@ REFERERS = {
     "mangalivre.to": "https://mangalivre.to/",
     "mangalivre.blog": "https://mangalivre.blog/",
     "xn--c5wx58dnej.online": "https://mangalivre.blog/",
+    "dropescan.com": "https://beta.dropescan.com/",
     "montetaiscanlator.xyz": "https://montetaiscanlator.xyz/",
     "euphoriascan.com": "https://euphoriascan.com/",
+    "arthurscan.xyz": "https://arthurscan.xyz/",
+    "squadxfbs.com": "https://squadxfbs.com/",
     "inkapk.net": "https://inkapk.net/",
 }
 
@@ -66,6 +77,8 @@ MAX_REDIRECTS = 5
 CORS_SAFE_HOST_SUFFIXES = (
     "uploads.mangadex.org",
     ".mangadex.network",
+    # MangaFlix serve capas e paginas com `Access-Control-Allow-Origin: *`.
+    ".mangaflix.net",
 )
 
 
